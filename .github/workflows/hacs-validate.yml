@@ -1,0 +1,27 @@
+name: HACS Validation
+
+# Required before submitting to hacs/default: the action must pass with no
+# errors and no ignores. Running it on every push means problems surface now
+# rather than in a review queue months from now.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # HACS's own requirements change; a daily run catches that without a push.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: HACS Action
+        uses: hacs/action@main
+        with:
+          category: plugin
