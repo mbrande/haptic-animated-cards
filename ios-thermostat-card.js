@@ -22,7 +22,7 @@
  * No build step, no dependencies, plain custom element + Shadow DOM.
  */
 
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent - the detail
  * is assigned as a property after construction, matching the frontend. */
@@ -239,18 +239,26 @@ class IosThermostatCard extends HTMLElement {
           color: var(--secondary-text-color);
           text-align: center; min-height: 1.2em;
         }
-        .modes {
-          display: flex; flex-wrap: wrap; gap: 6px;
-          justify-content: center; margin-top: 10px;
+        /* A native <select> on purpose: iOS renders it as the system wheel
+         * picker, which is exactly the interaction being asked for, and it is
+         * accessible and keyboard-navigable for free. appearance:none strips the
+         * platform chrome so it can be styled as an iOS pill. */
+        .modesel {
+          font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .3px;
+          -webkit-appearance: none; appearance: none;
+          border: 0; border-radius: 16px; cursor: pointer;
+          padding: 7px 30px 7px 16px; margin-top: 12px;
+          color: #fff; text-align: center;
+          transition: background .25s ease;
+          background-repeat: no-repeat;
+          background-position: right 11px center;
+          background-size: 11px;
+          background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><path d="M1 1.5L6 6.5L11 1.5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>');
         }
-        .modes button {
-          font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .3px;
-          border: 0; border-radius: 15px; padding: 6px 13px; cursor: pointer;
-          background: var(--divider-color, #3a3a3c);
-          color: var(--secondary-text-color);
-          transition: background .2s ease, color .2s ease;
-        }
-        .modes button.active { color: #fff; }
+        .modesel:focus { outline: none; }
+        /* The dropdown list itself is drawn by the platform, so give the options
+         * a sane background - inheriting the pill colour makes them unreadable. */
+        .modesel option { color: initial; background: initial; font-weight: 500; }
         .unavail {
           font-size: 15px; color: var(--error-color, #ff453a); padding: 28px 0;
         }
@@ -280,7 +288,7 @@ class IosThermostatCard extends HTMLElement {
           </div>
         </div>
         <div class="current"></div>
-        <div class="modes"></div>
+        <select class="modesel" aria-label="HVAC mode"></select>
       </ha-card>
     `;
 
@@ -294,11 +302,13 @@ class IosThermostatCard extends HTMLElement {
       mode: this.shadowRoot.querySelector(".mode"),
       target: this.shadowRoot.querySelector(".target"),
       current: this.shadowRoot.querySelector(".current"),
-      modes: this.shadowRoot.querySelector(".modes"),
+      modesel: this.shadowRoot.querySelector(".modesel"),
       grad: this.shadowRoot.querySelector("linearGradient"),
     };
     this._appliedRamp = null;
     this._appliedModes = null;
+
+    this._els.modesel.addEventListener("change", (e) => this._setMode(e.target.value));
 
     const svg = this._els.svg;
     svg.addEventListener("pointerdown", (e) => this._onDown(e));
@@ -381,20 +391,20 @@ class IosThermostatCard extends HTMLElement {
     });
   }
 
-  /* Buttons are rebuilt only when the available mode LIST changes, not on every
-   * state update - otherwise a tap could land on a node that was just replaced. */
+  /* Options are rebuilt only when the available mode LIST changes, not on every
+   * state update - rebuilding mid-gesture would close the picker under the
+   * user's finger. */
   _applyModes(modes) {
     const key = modes.join("|");
     if (this._appliedModes === key) return;
     this._appliedModes = key;
-    const host = this._els.modes;
-    host.textContent = "";
+    const sel = this._els.modesel;
+    sel.textContent = "";
     for (const m of modes) {
-      const b = document.createElement("button");
-      b.textContent = MODE_LABEL[m] || m.replace(/_/g, " ");
-      b.dataset.mode = m;
-      b.addEventListener("click", () => this._setMode(m));
-      host.appendChild(b);
+      const o = document.createElement("option");
+      o.value = m;
+      o.textContent = MODE_LABEL[m] || m.replace(/_/g, " ");
+      sel.appendChild(o);
     }
   }
 
@@ -414,8 +424,7 @@ class IosThermostatCard extends HTMLElement {
       this._els.current.textContent = this._config.entity;
       this._els.value.setAttribute("d", "");
       this._els.knob.setAttribute("r", "0");
-      this._els.modes.textContent = "";
-      this._appliedModes = null;
+      this._els.modesel.style.display = "none";
       return;
     }
 
@@ -459,16 +468,19 @@ class IosThermostatCard extends HTMLElement {
     this._els.current.textContent =
       cur != null ? `Currently ${Number(cur).toFixed(1)}${unit}` : "";
 
-    // hvac mode buttons
+    // hvac mode selector
     const modes = this._config.modes === false
       ? []
       : (s.attributes.hvac_modes || []);
     this._applyModes(modes);
-    for (const b of this._els.modes.children) {
-      const active = b.dataset.mode === s.state;
-      b.classList.toggle("active", active);
-      b.style.background = active ? deep : "";
+    const sel = this._els.modesel;
+    sel.style.display = modes.length ? "" : "none";
+    // Don't yank the value out from under an open picker mid-selection.
+    if (document.activeElement !== this && sel.value !== s.state) {
+      sel.value = s.state;
     }
+    // backgroundColor only, so the chevron background-image set in CSS survives
+    sel.style.backgroundColor = deep;
   }
 }
 
