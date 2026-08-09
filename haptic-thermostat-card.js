@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.2.1";
+const VERSION = "2.3.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -225,24 +225,71 @@ class HapticThermostatCard extends HTMLElement {
           color: #fff;
         }
         ha-card:active { transform: scale(.97); filter: brightness(1.08); }
-        .bg {
-          position: absolute; inset: 0;
-          background-size: 300% 300%;
-          background-position: 0% 50%;
-          animation: drift var(--drift-speed, 8s) linear infinite;
+        /* The STRONG gradient stays at natural size on .bg - panning an
+         * oversized gradient showed only a thin slice of it at any moment,
+         * which is why the depth washed out. Motion comes from layers ABOVE
+         * the gradient instead: three radial glow orbs drifting lava-lamp
+         * style (transform-only, so GPU composited) and a periodic sheen
+         * sweep. Orb colours and tempo differ per mode. */
+        .bg { position: absolute; inset: 0; }
+        .blob {
+          position: absolute; width: 130%; aspect-ratio: 1;
+          border-radius: 50%;
+          background: radial-gradient(circle, var(--c) 0%, transparent 62%);
+          mix-blend-mode: screen; opacity: .8;
+          will-change: transform;
         }
-        .bg.no-anim { animation: none; }
-        /* A circular sweep rather than a straight slide - the gradient travels
-         * through all four edges, so the movement is visible. */
-        @keyframes drift {
-          0%   { background-position:   0%  50%; }
-          25%  { background-position:  50%   0%; }
-          50%  { background-position: 100%  50%; }
-          75%  { background-position:  50% 100%; }
-          100% { background-position:   0%  50%; }
+        .b1 { top: -55%; left: -45%; animation: float1 calc(var(--drift-speed, 8s) * 1.15) ease-in-out infinite alternate; }
+        .b2 { bottom: -60%; right: -45%; animation: float2 calc(var(--drift-speed, 8s) * 1.6) ease-in-out infinite alternate; }
+        .b3 {
+          top: -20%; left: -15%; width: 170%;
+          mix-blend-mode: multiply; opacity: .55;
+          animation: float3 calc(var(--drift-speed, 8s) * 2.2) ease-in-out infinite alternate;
         }
+        .sheen {
+          position: absolute; top: -20%; bottom: -20%; width: 45%;
+          background: linear-gradient(100deg, transparent, rgba(255,255,255,.16) 45%, rgba(255,255,255,.28) 50%, rgba(255,255,255,.16) 55%, transparent);
+          transform: translateX(-220%) skewX(-18deg);
+          mix-blend-mode: screen;
+          animation: sheen calc(var(--drift-speed, 8s) * 2.5) linear infinite;
+          will-change: transform;
+        }
+        @keyframes float1 {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          50%  { transform: translate3d(28%, 22%, 0) scale(1.12); }
+          100% { transform: translate3d(52%, 6%, 0) scale(.94); }
+        }
+        @keyframes float2 {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          50%  { transform: translate3d(-30%, -18%, 0) scale(1.15); }
+          100% { transform: translate3d(-8%, -42%, 0) scale(1); }
+        }
+        @keyframes float3 {
+          0%   { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(14%, 20%, 0); }
+        }
+        /* Off-screen most of the cycle, one clean pass across. */
+        @keyframes sheen {
+          0%, 64% { transform: translateX(-220%) skewX(-18deg); }
+          100%    { transform: translateX(320%) skewX(-18deg); }
+        }
+        /* Mode choreography. Cool drifts glacially (the defaults above); heat
+         * runs the same paths noticeably faster, so it reads as embers rather
+         * than ice. */
+        .m-heat .b1 { animation-duration: calc(var(--drift-speed, 8s) * .65); }
+        .m-heat .b2 { animation-duration: calc(var(--drift-speed, 8s) * .9); }
+        .m-heat .b3 { animation-duration: calc(var(--drift-speed, 8s) * 1.3); }
+        .m-heat .sheen { animation-duration: calc(var(--drift-speed, 8s) * 1.8); }
+        /* Orb palettes per mode. */
+        .m-cool  .b1 { --c: #9BE8FF; } .m-cool  .b2 { --c: #2E6BFF; } .m-cool  .b3 { --c: #032A66; }
+        .m-heat  .b1 { --c: #FFD27A; } .m-heat  .b2 { --c: #FF5A00; } .m-heat  .b3 { --c: #7A1600; }
+        .m-dry   .b1 { --c: #FFE9A6; } .m-dry   .b2 { --c: #FFB800; } .m-dry   .b3 { --c: #7A5200; }
+        .m-fan   .b1 { --c: #CFF3FF; } .m-fan   .b2 { --c: #32ADE6; } .m-fan   .b3 { --c: #08506E; }
+        .m-idle  .b1 { --c: #D0D0D4; } .m-idle  .b2 { --c: #86868C; } .m-idle  .b3 { --c: #2C2C30; }
+        .m-range .b1 { --c: #FFB35C; } .m-range .b2 { --c: #4C9BFF; } .m-range .b3 { --c: #24144A; }
+        .bg.no-anim .blob, .bg.no-anim .sheen { animation: none; }
         @media (prefers-reduced-motion: reduce) {
-          .bg { animation: none; }
+          .blob, .sheen { animation: none; }
         }
         .content {
           position: relative; z-index: 1;
@@ -271,7 +318,12 @@ class HapticThermostatCard extends HTMLElement {
         .unavail { font-size: 15px; font-weight: 600; }
       </style>
       <ha-card>
-        <div class="bg"></div>
+        <div class="bg">
+          <div class="blob b1"></div>
+          <div class="blob b2"></div>
+          <div class="blob b3"></div>
+          <div class="sheen"></div>
+        </div>
         <div class="content">
         <div class="top">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 13V5a3 3 0 0 0-6 0v8a5 5 0 1 0 6 0zm-3-9a1 1 0 0 1 1 1v8.6l.5.3a3 3 0 1 1-3 0l.5-.3V5a1 1 0 0 1 1-1z"/></svg>
@@ -307,6 +359,13 @@ class HapticThermostatCard extends HTMLElement {
     if (on) c.style.setProperty("--drift-speed", `${spd > 0 ? spd : 8}s`);
   }
 
+  _setModeClass(key) {
+    const bg = this._tEls.bg;
+    for (const m of ["heat", "cool", "dry", "fan", "idle", "range"]) {
+      bg.classList.toggle("m-" + m, m === key);
+    }
+  }
+
   _renderTile() {
     if (!this._tEls) return;
     const s = this._s;
@@ -316,6 +375,7 @@ class HapticThermostatCard extends HTMLElement {
 
     if (!s || s.state === "unavailable" || s.state === "unknown") {
       this._tEls.bg.style.backgroundImage = "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
+      this._setModeClass("idle");
       this._applyAnimation();
       this._tEls.big.innerHTML = `<span class="unavail">${s ? s.state : "not found"}</span>`;
       this._tEls.sub.textContent = this._config.entity;
@@ -325,6 +385,7 @@ class HapticThermostatCard extends HTMLElement {
     const [c0, c1, c2] = this._tileShade;
     this._tEls.bg.style.backgroundImage =
       `linear-gradient(150deg, ${c0} 0%, ${c1} 45%, ${c2} 100%)`;
+    this._setModeClass(this._rampKey);
     this._applyAnimation();
 
     // Current temperature is the glanceable number, as on the Home tile.
