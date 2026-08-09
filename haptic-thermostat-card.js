@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.3.1";
+const VERSION = "2.3.3";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -239,12 +239,12 @@ class HapticThermostatCard extends HTMLElement {
           mix-blend-mode: screen; opacity: .8;
           will-change: transform;
         }
-        .b1 { top: -55%; left: -45%; animation: float1 calc(var(--drift-speed, 8s) * 1.15) ease-in-out infinite alternate; }
-        .b2 { bottom: -60%; right: -45%; animation: float2 calc(var(--drift-speed, 8s) * 1.6) ease-in-out infinite alternate; }
+        .b1 { top: -55%; left: -45%; animation: float1 calc(var(--drift-speed, 8s) * 1.15 * var(--r, 1)) ease-in-out infinite alternate; }
+        .b2 { bottom: -60%; right: -45%; animation: float2 calc(var(--drift-speed, 8s) * 1.6 * var(--r, 1)) ease-in-out infinite alternate; }
         .b3 {
           top: -20%; left: -15%; width: 170%;
           mix-blend-mode: multiply; opacity: .55;
-          animation: float3 calc(var(--drift-speed, 8s) * 2.2) ease-in-out infinite alternate;
+          animation: float3 calc(var(--drift-speed, 8s) * 2.2 * var(--r, 1)) ease-in-out infinite alternate;
         }
         /* A light catch, not a stripe: the old gradient spiked to its peak
          * across 5% of the band, which drew a visible edge. Bell-curve stops
@@ -252,19 +252,28 @@ class HapticThermostatCard extends HTMLElement {
          * left of the edges, and the angle matched to the base gradient's
          * 150deg so it reads as the same light source. */
         .sheen {
-          position: absolute; top: -25%; bottom: -25%; width: 70%;
+          position: absolute; top: -25%; bottom: -25%; width: 95%;
+          /* Comet, not a bar: the wave moves left-to-right, so the bright crest
+           * sits near the leading edge at 84% and the light decays in a long
+           * tail behind it, with two fainter echo ripples further back - that
+           * is the trail. The leading edge falls off fast so the wave has a
+           * face. */
           background: linear-gradient(115deg,
             transparent 0%,
-            rgba(255,255,255,.04) 28%,
-            rgba(255,255,255,.10) 44%,
-            rgba(255,255,255,.15) 50%,
-            rgba(255,255,255,.10) 56%,
-            rgba(255,255,255,.04) 72%,
+            rgba(255,255,255,.03) 14%,
+            rgba(255,255,255,.07) 20%,
+            rgba(255,255,255,.03) 27%,
+            rgba(255,255,255,.09) 42%,
+            rgba(255,255,255,.05) 52%,
+            rgba(255,255,255,.08) 64%,
+            rgba(255,255,255,.13) 74%,
+            rgba(255,255,255,.20) 84%,
+            rgba(255,255,255,.07) 93%,
             transparent 100%);
-          filter: blur(8px);
+          filter: blur(10px);
           transform: translateX(-220%) skewX(-18deg);
           mix-blend-mode: screen;
-          animation: sheen calc(var(--drift-speed, 8s) * 2.5) linear infinite;
+          animation: sheen calc(var(--drift-speed, 8s) * 2.5 * var(--r, 1)) linear infinite;
           will-change: transform;
         }
         @keyframes float1 {
@@ -289,10 +298,10 @@ class HapticThermostatCard extends HTMLElement {
         /* Mode choreography. Cool drifts glacially (the defaults above); heat
          * runs the same paths noticeably faster, so it reads as embers rather
          * than ice. */
-        .m-heat .b1 { animation-duration: calc(var(--drift-speed, 8s) * .65); }
-        .m-heat .b2 { animation-duration: calc(var(--drift-speed, 8s) * .9); }
-        .m-heat .b3 { animation-duration: calc(var(--drift-speed, 8s) * 1.3); }
-        .m-heat .sheen { animation-duration: calc(var(--drift-speed, 8s) * 1.8); }
+        .m-heat .b1 { animation-duration: calc(var(--drift-speed, 8s) * .65 * var(--r, 1)); }
+        .m-heat .b2 { animation-duration: calc(var(--drift-speed, 8s) * .9 * var(--r, 1)); }
+        .m-heat .b3 { animation-duration: calc(var(--drift-speed, 8s) * 1.3 * var(--r, 1)); }
+        .m-heat .sheen { animation-duration: calc(var(--drift-speed, 8s) * 1.8 * var(--r, 1)); }
         /* Orb palettes per mode. */
         .m-cool  .b1 { --c: #9BE8FF; } .m-cool  .b2 { --c: #2E6BFF; } .m-cool  .b3 { --c: #032A66; }
         .m-heat  .b1 { --c: #FFD27A; } .m-heat  .b2 { --c: #FF5A00; } .m-heat  .b3 { --c: #7A1600; }
@@ -359,6 +368,21 @@ class HapticThermostatCard extends HTMLElement {
     // `click`, deliberately: a touch that becomes a scroll never produces one,
     // so scrolling past the card can't open it - and there are no drag handlers
     // here at all, so scrolling can't change the temperature either.
+    // De-loop the choreography: each layer gets a random tempo multiplier, a
+    // random negative delay (so it starts mid-phase), and a coin-flip travel
+    // direction. Randomised once per card build - the composition never visibly
+    // repeats, and two cards on one dashboard never move in sync. The sheen
+    // keeps its direction: the comet tail points the way it travels.
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (const sel of [".b1", ".b2", ".b3", ".sheen"]) {
+      const el = this.shadowRoot.querySelector(sel);
+      el.style.setProperty("--r", rnd(0.82, 1.28).toFixed(3));
+      el.style.animationDelay = "-" + rnd(0, 30).toFixed(2) + "s";
+      if (sel !== ".sheen" && Math.random() < 0.5) {
+        el.style.animationDirection = "alternate-reverse";
+      }
+    }
+
     this._tEls.card.addEventListener("click", () => this.openPanel());
   }
 
