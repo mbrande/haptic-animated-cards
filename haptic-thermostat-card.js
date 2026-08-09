@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.0.3";
+const VERSION = "2.1.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -76,18 +76,21 @@ const RAMPS = {
   range: [[0, "#FF7A00"], [0.5, "#F2E6D8"], [1, "#0A84FF"]],
 };
 
-/* Tile shades, light -> deep. Which shade is chosen depends on how hard the
- * thermostat is being asked to work: a low cool setpoint or a high heat setpoint
- * picks a deeper colour. */
+/* Tile shades, three stops each, light -> deep. Which set is chosen depends on
+ * how hard the thermostat is being asked to work: a low cool setpoint or a high
+ * heat setpoint picks a deeper, more saturated set. Three stops rather than two
+ * so the gradient reads with real depth as it drifts. */
 const TILE_SHADES = {
-  cool: [["#5AC8FA", "#0A84FF"], ["#3BB3F5", "#0A6FE8"], ["#1E9BEC", "#0B5FD0"],
-         ["#1481D8", "#0A4FB0"], ["#0E67B4", "#083E8C"]],
-  heat: [["#FFCC66", "#FF9F0A"], ["#FFB84D", "#FF8A00"], ["#FFA033", "#FF6B00"],
-         ["#FF8A1F", "#F25200"], ["#FF7300", "#D93E00"]],
-  dry: [["#FFE08A", "#FFB800"]],
-  fan: [["#A0E9FF", "#32ADE6"]],
-  idle: [["#8E8E93", "#5A5A5F"]],
-  range: [["#FF9F0A", "#0A84FF"]],
+  cool: [["#8FD8FF", "#3BB3F5", "#0A84FF"], ["#6FC8FA", "#1E9BEC", "#0A6FE8"],
+         ["#4FB4F0", "#0F86DC", "#0B5FD0"], ["#2E9BE0", "#0A6CC0", "#0A4FB0"],
+         ["#1B7FC4", "#0A529E", "#083E8C"]],
+  heat: [["#FFD98A", "#FFB84D", "#FF9F0A"], ["#FFC96B", "#FFA333", "#FF8A00"],
+         ["#FFB74D", "#FF8C1F", "#FF6B00"], ["#FF9F33", "#FF6E0A", "#F25200"],
+         ["#FF8A1F", "#F25200", "#C43200"]],
+  dry: [["#FFEDB0", "#FFD24D", "#FFB800"]],
+  fan: [["#BDEFFF", "#6FD4F5", "#32ADE6"]],
+  idle: [["#A0A0A6", "#7C7C82", "#4A4A50"]],
+  range: [["#FF9F0A", "#C77A55", "#0A84FF"]],
 };
 
 const MODE_LABEL = {
@@ -219,6 +222,21 @@ class HapticThermostatCard extends HTMLElement {
           cursor: pointer;
           transition: transform .18s ease, filter .18s ease;
           color: #fff;
+          /* Oversized so there is somewhere to drift to. background-size is set
+           * here and the colours are applied via style.backgroundImage in JS -
+           * assigning the 'background' shorthand would reset this back to auto
+           * and the animation would have nothing to move. */
+          background-size: 240% 240%;
+          background-position: 0% 50%;
+          animation: drift 16s ease-in-out infinite alternate;
+        }
+        @keyframes drift {
+          from { background-position: 0% 50%; }
+          to   { background-position: 100% 50%; }
+        }
+        /* It is a published card - don't animate at people who asked not to. */
+        @media (prefers-reduced-motion: reduce) {
+          ha-card { animation: none; }
         }
         ha-card:active { transform: scale(.97); filter: brightness(1.08); }
         .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -272,14 +290,15 @@ class HapticThermostatCard extends HTMLElement {
       this._config.name ?? (s ? s.attributes.friendly_name : this._config.entity);
 
     if (!s || s.state === "unavailable" || s.state === "unknown") {
-      this._tEls.card.style.background = "linear-gradient(160deg,#8E8E93,#5A5A5F)";
+      this._tEls.card.style.backgroundImage = "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
       this._tEls.big.innerHTML = `<span class="unavail">${s ? s.state : "not found"}</span>`;
       this._tEls.sub.textContent = this._config.entity;
       return;
     }
 
-    const [c0, c1] = this._tileShade;
-    this._tEls.card.style.background = `linear-gradient(160deg, ${c0} 0%, ${c1} 100%)`;
+    const [c0, c1, c2] = this._tileShade;
+    this._tEls.card.style.backgroundImage =
+      `linear-gradient(150deg, ${c0} 0%, ${c1} 45%, ${c2} 100%)`;
 
     // Current temperature is the glanceable number, as on the Home tile.
     const cur = s.attributes.current_temperature;
