@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.1.1";
+const VERSION = "3.1.2";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1152,6 +1152,13 @@ class HapticTempPill extends HTMLElement {
   }
 
   getCardSize() { return 1; }
+
+  /* The sections grid sizes cards by what they DECLARE, not by their content -
+   * without this, an unknown custom card is guessed at 2 rows and no amount of
+   * CSS slimming changes the box. Both spellings for API compatibility. */
+  getGridOptions() { return { rows: 1, columns: 6, min_rows: 1 }; }
+  getLayoutOptions() { return { grid_rows: 1, grid_columns: 6, grid_min_rows: 1 }; }
+
   static getStubConfig() { return { entity: "" }; }
 
   set hass(hass) {
