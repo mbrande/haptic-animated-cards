@@ -110,5 +110,4 @@ modes: true       # optional, set false to hide the HVAC mode selector
 
 ## Licence
 
-No licence file yet. Until one is added, all rights are reserved — open an issue
-if you would like one.
+[MIT](LICENSE). Use it, fork it, ship it — no warranty.
