@@ -22,7 +22,7 @@
  * No build step, no dependencies, plain custom element + Shadow DOM.
  */
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent - the detail
  * is assigned as a property after construction, matching the frontend. */
@@ -44,6 +44,23 @@ const haptic = (type) => fireEvent(window, "haptic", type);
  * bottom, same as the iOS dial. */
 const START_ANGLE = 135;
 const SWEEP = 270;
+const R = 76;        // arc radius
+const STROKE = 22;   // ring thickness - iOS's ring is chunky
+
+const polar = (cx, cy, r, angleDeg) => {
+  const a = (angleDeg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+};
+
+function arcPath(cx, cy, r, startAngle, endAngle) {
+  if (endAngle - startAngle <= 0.01) return "";
+  const start = polar(cx, cy, r, startAngle);
+  const end = polar(cx, cy, r, endAngle);
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+}
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 /* Multi-stop ramps, matched to the iOS Home dial.
  *
@@ -62,20 +79,16 @@ const RAMPS = {
   idle: [[0, "#6E6E73"], [0.5, "#C7C7CC"], [1, "#8E8E93"]],
 };
 
-const polar = (cx, cy, r, angleDeg) => {
-  const a = (angleDeg * Math.PI) / 180;
-  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+/* HA's mode ids are not what you'd say out loud. */
+const MODE_LABEL = {
+  off: "Off",
+  heat: "Heat",
+  cool: "Cool",
+  heat_cool: "Auto",
+  auto: "Auto",
+  dry: "Dry",
+  fan_only: "Fan",
 };
-
-function arcPath(cx, cy, r, startAngle, endAngle) {
-  if (endAngle - startAngle <= 0.01) return "";
-  const start = polar(cx, cy, r, startAngle);
-  const end = polar(cx, cy, r, endAngle);
-  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
-}
-
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 class IosThermostatCard extends HTMLElement {
   constructor() {
@@ -98,14 +111,14 @@ class IosThermostatCard extends HTMLElement {
       throw new Error("ios-thermostat-card: entity must be a climate.* entity");
     }
     this._config = Object.assign(
-      { name: null, min: null, max: null, step: null },
+      { name: null, min: null, max: null, step: null, modes: true },
       config
     );
     this._built = false;
   }
 
   getCardSize() {
-    return 6;
+    return 5;
   }
 
   static getStubConfig() {
@@ -189,17 +202,20 @@ class IosThermostatCard extends HTMLElement {
       <style>
         :host { display: block; }
         ha-card {
-          padding: 16px 8px 18px;
+          padding: 14px 8px 14px;
           display: flex; flex-direction: column; align-items: center;
         }
         .name {
           font-size: 15px; font-weight: 600; letter-spacing: .2px;
           color: var(--secondary-text-color);
-          margin: 0 0 4px; text-align: center;
+          margin: 0 0 2px; text-align: center;
         }
-        .wrap { position: relative; width: 100%; max-width: 320px; }
+        /* The dial's 90 degree gap leaves dead space at the bottom of a square
+         * SVG. Pull the following content up into it instead of letting the card
+         * grow taller than it needs to be. */
+        .wrap { position: relative; width: 100%; max-width: 320px; margin-bottom: -9%; }
         svg { width: 100%; height: auto; display: block; touch-action: none; }
-        .track { stroke: var(--divider-color, #3a3a3c); opacity: .45; }
+        .track { stroke: var(--divider-color, #3a3a3c); opacity: .4; }
         .knob  { transition: fill .35s ease; }
         .centre {
           position: absolute; inset: 0;
@@ -212,17 +228,29 @@ class IosThermostatCard extends HTMLElement {
           letter-spacing: .4px; opacity: .85;
         }
         .target {
-          font-size: 62px; font-weight: 300; line-height: 1.02;
+          font-size: 58px; font-weight: 300; line-height: 1.02;
           font-feature-settings: "tnum"; /* stop digits jittering while dragging */
           color: var(--primary-text-color);
         }
-        .target sup { font-size: 22px; font-weight: 400; vertical-align: super; }
+        .target sup { font-size: 21px; font-weight: 400; vertical-align: super; }
         /* Sits BELOW the gauge, not inside it. */
         .current {
           font-size: 14px; font-weight: 500;
           color: var(--secondary-text-color);
-          margin-top: 2px; text-align: center; min-height: 1.2em;
+          text-align: center; min-height: 1.2em;
         }
+        .modes {
+          display: flex; flex-wrap: wrap; gap: 6px;
+          justify-content: center; margin-top: 10px;
+        }
+        .modes button {
+          font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .3px;
+          border: 0; border-radius: 15px; padding: 6px 13px; cursor: pointer;
+          background: var(--divider-color, #3a3a3c);
+          color: var(--secondary-text-color);
+          transition: background .2s ease, color .2s ease;
+        }
+        .modes button.active { color: #fff; }
         .unavail {
           font-size: 15px; color: var(--error-color, #ff453a); padding: 28px 0;
         }
@@ -241,10 +269,10 @@ class IosThermostatCard extends HTMLElement {
                               x1="26" y1="174" x2="174" y2="26">
               </linearGradient>
             </defs>
-            <path class="track" fill="none" stroke-width="14" stroke-linecap="round"></path>
-            <path class="value" fill="none" stroke-width="14" stroke-linecap="round"
+            <path class="track" fill="none" stroke-width="${STROKE}" stroke-linecap="round"></path>
+            <path class="value" fill="none" stroke-width="${STROKE}" stroke-linecap="round"
                   stroke="url(#${g})"></path>
-            <circle class="knob" r="9"></circle>
+            <circle class="knob" r="10"></circle>
           </svg>
           <div class="centre">
             <div class="mode"></div>
@@ -252,6 +280,7 @@ class IosThermostatCard extends HTMLElement {
           </div>
         </div>
         <div class="current"></div>
+        <div class="modes"></div>
       </ha-card>
     `;
 
@@ -265,9 +294,11 @@ class IosThermostatCard extends HTMLElement {
       mode: this.shadowRoot.querySelector(".mode"),
       target: this.shadowRoot.querySelector(".target"),
       current: this.shadowRoot.querySelector(".current"),
+      modes: this.shadowRoot.querySelector(".modes"),
       grad: this.shadowRoot.querySelector("linearGradient"),
     };
     this._appliedRamp = null;
+    this._appliedModes = null;
 
     const svg = this._els.svg;
     svg.addEventListener("pointerdown", (e) => this._onDown(e));
@@ -342,6 +373,31 @@ class IosThermostatCard extends HTMLElement {
     });
   }
 
+  _setMode(mode) {
+    haptic("light");
+    this._hass.callService("climate", "set_hvac_mode", {
+      entity_id: this._config.entity,
+      hvac_mode: mode,
+    });
+  }
+
+  /* Buttons are rebuilt only when the available mode LIST changes, not on every
+   * state update - otherwise a tap could land on a node that was just replaced. */
+  _applyModes(modes) {
+    const key = modes.join("|");
+    if (this._appliedModes === key) return;
+    this._appliedModes = key;
+    const host = this._els.modes;
+    host.textContent = "";
+    for (const m of modes) {
+      const b = document.createElement("button");
+      b.textContent = MODE_LABEL[m] || m.replace(/_/g, " ");
+      b.dataset.mode = m;
+      b.addEventListener("click", () => this._setMode(m));
+      host.appendChild(b);
+    }
+  }
+
   /* ---------- render ---------- */
 
   _render() {
@@ -358,19 +414,21 @@ class IosThermostatCard extends HTMLElement {
       this._els.current.textContent = this._config.entity;
       this._els.value.setAttribute("d", "");
       this._els.knob.setAttribute("r", "0");
+      this._els.modes.textContent = "";
+      this._appliedModes = null;
       return;
     }
 
     const target = this._target;
     const rampKey = this._rampKey;
-    const deep = RAMPS[rampKey][0][1];   // first stop, used for the mode label
+    const deep = RAMPS[rampKey][0][1];   // first stop, used for accents
     const unit = this._hass.config.unit_system.temperature || "°";
 
     this._applyRamp(rampKey);
 
     this._els.track.setAttribute(
       "d",
-      arcPath(100, 100, 82, START_ANGLE, START_ANGLE + SWEEP)
+      arcPath(100, 100, R, START_ANGLE, START_ANGLE + SWEEP)
     );
 
     if (target === null) {
@@ -380,12 +438,12 @@ class IosThermostatCard extends HTMLElement {
     } else {
       const frac = clamp((target - this._min) / (this._max - this._min), 0, 1);
       const endAngle = START_ANGLE + frac * SWEEP;
-      this._els.value.setAttribute("d", arcPath(100, 100, 82, START_ANGLE, endAngle));
+      this._els.value.setAttribute("d", arcPath(100, 100, R, START_ANGLE, endAngle));
 
-      const k = polar(100, 100, 82, endAngle);
+      const k = polar(100, 100, R, endAngle);
       this._els.knob.setAttribute("cx", k.x);
       this._els.knob.setAttribute("cy", k.y);
-      this._els.knob.setAttribute("r", "9");
+      this._els.knob.setAttribute("r", "10");
       this._els.knob.setAttribute("fill", "#ffffff");
 
       const dp = this._step < 1 ? 1 : 0;
@@ -400,6 +458,17 @@ class IosThermostatCard extends HTMLElement {
     const cur = s.attributes.current_temperature;
     this._els.current.textContent =
       cur != null ? `Currently ${Number(cur).toFixed(1)}${unit}` : "";
+
+    // hvac mode buttons
+    const modes = this._config.modes === false
+      ? []
+      : (s.attributes.hvac_modes || []);
+    this._applyModes(modes);
+    for (const b of this._els.modes.children) {
+      const active = b.dataset.mode === s.state;
+      b.classList.toggle("active", active);
+      b.style.background = active ? deep : "";
+    }
   }
 }
 
