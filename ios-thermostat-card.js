@@ -11,18 +11,18 @@
  *     fireEvent(window, "haptic", "selection")
  *
  * The companion app listens for that window event and produces the tap. Verified
- * against Bubble Card's working implementation on this instance. Note the event
- * is built with `new Event(...)` and `.detail` assigned afterwards - NOT
+ * against Bubble Card's working implementation. Note the event is built with
+ * `new Event(...)` and `.detail` assigned afterwards - NOT
  * `new CustomEvent(type, {detail})`. That is how HA does it internally and it is
  * what the app expects.
  *
  * Haptics only fire inside the iOS/Android companion app. In a desktop browser
- * or the Fire tablet kiosk the card renders and works normally, silently.
+ * the card renders and works normally, silently.
  *
  * No build step, no dependencies, plain custom element + Shadow DOM.
  */
 
-const VERSION = "1.5.0";
+const VERSION = "1.6.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent - the detail
  * is assigned as a property after construction, matching the frontend. */
@@ -69,14 +69,16 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * and comes back to saturated colour at the end, which reads as a sheen on a
  * glossy ring. A two-stop gradient looks flat next to it.
  *
- * Offsets are along the gradient axis, which is laid diagonally bottom-left ->
- * top-right so it tracks the direction the arc actually travels. */
+ * `range` is the heat_cool case: the ramp runs warm at the low (heat) end to
+ * cool at the high end, and its axis is re-pointed at the two handles so the
+ * colours land exactly across the active band. */
 const RAMPS = {
   heat: [[0, "#FF5E00"], [0.44, "#FFC66B"], [0.63, "#FFEDCB"], [1, "#FF9F0A"]],
   cool: [[0, "#0A84FF"], [0.44, "#8FD0F5"], [0.63, "#DCF3F8"], [1, "#4C9BFF"]],
   dry: [[0, "#FFB800"], [0.5, "#FFEBB0"], [1, "#FFC93C"]],
   fan: [[0, "#32ADE6"], [0.5, "#CFF3FF"], [1, "#5EC8F0"]],
   idle: [[0, "#6E6E73"], [0.5, "#C7C7CC"], [1, "#8E8E93"]],
+  range: [[0, "#FF7A00"], [0.5, "#F2E6D8"], [1, "#0A84FF"]],
 };
 
 /* HA's mode ids are not what you'd say out loud. */
@@ -95,7 +97,8 @@ class IosThermostatCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._dragging = false;
-    this._pending = null;      // target temp while dragging, before we commit
+    this._pending = null;        // {t} single, or {low, high} range - pre-commit
+    this._activeHandle = null;   // "t" | "low" | "high"
     this._lastHapticStep = null;
     this._built = false;
     /* Gradient ids must be unique per instance: two cards in one document would
@@ -154,11 +157,30 @@ class IosThermostatCard extends HTMLElement {
     return this._config.step ?? (s && s.attributes.target_temp_step) ?? 1;
   }
 
-  get _target() {
-    if (this._pending !== null) return this._pending;
+  /* A thermostat in heat_cool publishes target_temp_low/high and sets
+   * `temperature` to null. Detect on the ATTRIBUTES rather than on the mode
+   * name: implementations disagree about whether the range mode is called
+   * heat_cool, auto, or something else, but they all agree on the attributes. */
+  get _isRange() {
     const s = this._stateObj;
-    return s && s.attributes.temperature != null
-      ? Number(s.attributes.temperature)
+    if (!s) return false;
+    return s.attributes.target_temp_low != null &&
+           s.attributes.target_temp_high != null;
+  }
+
+  /* Current values, honouring an in-progress drag. */
+  get _values() {
+    if (this._pending) return this._pending;
+    const s = this._stateObj;
+    if (!s) return null;
+    if (this._isRange) {
+      return {
+        low: Number(s.attributes.target_temp_low),
+        high: Number(s.attributes.target_temp_high),
+      };
+    }
+    return s.attributes.temperature != null
+      ? { t: Number(s.attributes.temperature) }
       : null;
   }
 
@@ -168,6 +190,7 @@ class IosThermostatCard extends HTMLElement {
   get _rampKey() {
     const s = this._stateObj;
     if (!s || s.state === "off" || s.state === "unavailable") return "idle";
+    if (this._isRange) return "range";
     const action = s.attributes.hvac_action;
     const basis = action && action !== "idle" ? action : s.state;
     if (basis === "heating" || basis === "heat") return "heat";
@@ -191,6 +214,11 @@ class IosThermostatCard extends HTMLElement {
       stop.setAttribute("stop-color", colour);
       grad.appendChild(stop);
     }
+  }
+
+  _angleFor(t) {
+    const frac = clamp((t - this._min) / (this._max - this._min), 0, 1);
+    return START_ANGLE + frac * SWEEP;
   }
 
   /* ---------- build ---------- */
@@ -237,6 +265,12 @@ class IosThermostatCard extends HTMLElement {
           color: var(--primary-text-color);
         }
         .target sup { font-size: 21px; font-weight: 400; vertical-align: super; }
+        /* Two setpoints need to fit the same space one did. */
+        .target.range { font-size: 34px; font-weight: 400; }
+        .target.range sup { font-size: 15px; }
+        .target .lo { color: #FF9F0A; }
+        .target .hi { color: #4C9BFF; }
+        .target .dash { opacity: .45; margin: 0 6px; font-weight: 300; }
         /* Reading and mode selector share one row - stacked they cost two rows of
          * card height for two short items, which pushed the card past its grid
          * allocation and let the next section heading overlap it. */
@@ -283,7 +317,8 @@ class IosThermostatCard extends HTMLElement {
                    arc travels, so the ramp reads along the ring rather than across
                    it. userSpaceOnUse keeps it anchored to the dial while the arc
                    grows; the default bounding-box mode would rescale the ramp to
-                   the arc's own box and slide the colours under your finger. -->
+                   the arc's own box and slide the colours under your finger.
+                   In range mode the endpoints are re-pointed at the two handles. -->
               <linearGradient id="${g}" gradientUnits="userSpaceOnUse"
                               x1="26" y1="174" x2="174" y2="26">
               </linearGradient>
@@ -291,7 +326,8 @@ class IosThermostatCard extends HTMLElement {
             <path class="track" fill="none" stroke-width="${STROKE}" stroke-linecap="round"></path>
             <path class="value" fill="none" stroke-width="${STROKE}" stroke-linecap="round"
                   stroke="url(#${g})"></path>
-            <circle class="knob" r="10"></circle>
+            <circle class="knob knob-lo" r="0" fill="#ffffff"></circle>
+            <circle class="knob knob-hi" r="0" fill="#ffffff"></circle>
           </svg>
           <div class="centre">
             <div class="mode"></div>
@@ -311,7 +347,8 @@ class IosThermostatCard extends HTMLElement {
       svg: this.shadowRoot.querySelector("svg"),
       track: this.shadowRoot.querySelector(".track"),
       value: this.shadowRoot.querySelector(".value"),
-      knob: this.shadowRoot.querySelector(".knob"),
+      knobLo: this.shadowRoot.querySelector(".knob-lo"),
+      knobHi: this.shadowRoot.querySelector(".knob-hi"),
       mode: this.shadowRoot.querySelector(".mode"),
       target: this.shadowRoot.querySelector(".target"),
       current: this.shadowRoot.querySelector(".current"),
@@ -349,26 +386,55 @@ class IosThermostatCard extends HTMLElement {
   }
 
   _onDown(evt) {
-    if (!this._stateObj || this._stateObj.state === "unavailable") return;
+    const s = this._stateObj;
+    if (!s || s.state === "unavailable") return;
+    const v = this._values;
+    if (!v) return;
+
     this._dragging = true;
     this._els.svg.setPointerCapture(evt.pointerId);
     this._lastHapticStep = null;
+
+    if (v.t !== undefined) {
+      this._activeHandle = "t";
+    } else {
+      // Grab whichever setpoint the finger landed nearest.
+      const t = this._tempFromPointer(evt);
+      this._activeHandle =
+        Math.abs(t - v.low) <= Math.abs(t - v.high) ? "low" : "high";
+    }
+    this._pending = Object.assign({}, v);
     this._onMove(evt);
   }
 
   _onMove(evt) {
     if (!this._dragging) return;
     evt.preventDefault();
-    const t = this._tempFromPointer(evt);
-    if (t !== this._pending) {
-      this._pending = t;
-      // One tick per step crossed - this is the iOS "picker" feel.
-      if (this._lastHapticStep !== t) {
-        haptic("selection");
-        this._lastHapticStep = t;
-      }
-      this._render();
+    let t = this._tempFromPointer(evt);
+    const p = this._pending;
+    const step = this._step;
+
+    if (this._activeHandle === "t") {
+      if (p.t === t) return;
+      p.t = t;
+    } else if (this._activeHandle === "low") {
+      // Keep at least one step of separation, or the two handles cross over and
+      // HA rejects the service call.
+      t = Math.min(t, p.high - step);
+      if (p.low === t) return;
+      p.low = t;
+    } else {
+      t = Math.max(t, p.low + step);
+      if (p.high === t) return;
+      p.high = t;
     }
+
+    // One tick per step crossed - this is the iOS "picker" feel.
+    if (this._lastHapticStep !== t) {
+      haptic("selection");
+      this._lastHapticStep = t;
+    }
+    this._render();
   }
 
   _onUp(evt) {
@@ -379,21 +445,28 @@ class IosThermostatCard extends HTMLElement {
     } catch (e) {
       /* pointer already gone - harmless */
     }
-    const t = this._pending;
+    const p = this._pending;
+    const handle = this._activeHandle;
     this._pending = null;
-    if (t === null || !this._stateObj) return;
-
-    const current = this._stateObj.attributes.temperature;
-    if (Number(current) === Number(t)) return;   // nothing to do
+    this._activeHandle = null;
+    const s = this._stateObj;
+    if (!p || !s) return;
 
     // Commit on release rather than during the drag: dragging fires dozens of
     // moves and hammering set_temperature makes the thermostat lag and the ring
     // fight the user's finger.
+    let data;
+    if (handle === "t") {
+      if (Number(s.attributes.temperature) === p.t) return;   // nothing to do
+      data = { temperature: p.t };
+    } else {
+      if (Number(s.attributes.target_temp_low) === p.low &&
+          Number(s.attributes.target_temp_high) === p.high) return;
+      data = { target_temp_low: p.low, target_temp_high: p.high };
+    }
     haptic("light");
-    this._hass.callService("climate", "set_temperature", {
-      entity_id: this._config.entity,
-      temperature: t,
-    });
+    this._hass.callService("climate", "set_temperature",
+      Object.assign({ entity_id: this._config.entity }, data));
   }
 
   _setMode(mode) {
@@ -436,15 +509,17 @@ class IosThermostatCard extends HTMLElement {
         `<span class="unavail">${s ? s.state : "not found"}</span>`;
       this._els.current.textContent = this._config.entity;
       this._els.value.setAttribute("d", "");
-      this._els.knob.setAttribute("r", "0");
+      this._els.knobLo.setAttribute("r", "0");
+      this._els.knobHi.setAttribute("r", "0");
       this._els.modesel.style.display = "none";
       return;
     }
 
-    const target = this._target;
+    const v = this._values;
     const rampKey = this._rampKey;
     const deep = RAMPS[rampKey][0][1];   // first stop, used for accents
     const unit = this._hass.config.unit_system.temperature || "°";
+    const dp = this._step < 1 ? 1 : 0;
 
     this._applyRamp(rampKey);
 
@@ -453,24 +528,55 @@ class IosThermostatCard extends HTMLElement {
       arcPath(100, 100, R, START_ANGLE, START_ANGLE + SWEEP)
     );
 
-    if (target === null) {
+    if (!v) {
       this._els.value.setAttribute("d", "");
-      this._els.knob.setAttribute("r", "0");
+      this._els.knobLo.setAttribute("r", "0");
+      this._els.knobHi.setAttribute("r", "0");
       this._els.target.textContent = "--";
+      this._els.target.classList.remove("range");
+    } else if (v.t !== undefined) {
+      // ----- single setpoint -----
+      const end = this._angleFor(v.t);
+      this._els.value.setAttribute("d", arcPath(100, 100, R, START_ANGLE, end));
+      this._els.grad.setAttribute("x1", 26);
+      this._els.grad.setAttribute("y1", 174);
+      this._els.grad.setAttribute("x2", 174);
+      this._els.grad.setAttribute("y2", 26);
+
+      const k = polar(100, 100, R, end);
+      this._els.knobLo.setAttribute("r", "0");
+      this._els.knobHi.setAttribute("cx", k.x);
+      this._els.knobHi.setAttribute("cy", k.y);
+      this._els.knobHi.setAttribute("r", "10");
+
+      this._els.target.classList.remove("range");
+      this._els.target.innerHTML = `${v.t.toFixed(dp)}<sup>${unit}</sup>`;
     } else {
-      const frac = clamp((target - this._min) / (this._max - this._min), 0, 1);
-      const endAngle = START_ANGLE + frac * SWEEP;
-      this._els.value.setAttribute("d", arcPath(100, 100, R, START_ANGLE, endAngle));
+      // ----- heat_cool range: band between the two setpoints -----
+      const aLo = this._angleFor(v.low);
+      const aHi = this._angleFor(v.high);
+      this._els.value.setAttribute("d", arcPath(100, 100, R, aLo, aHi));
 
-      const k = polar(100, 100, R, endAngle);
-      this._els.knob.setAttribute("cx", k.x);
-      this._els.knob.setAttribute("cy", k.y);
-      this._els.knob.setAttribute("r", "10");
-      this._els.knob.setAttribute("fill", "#ffffff");
+      const kLo = polar(100, 100, R, aLo);
+      const kHi = polar(100, 100, R, aHi);
+      // Point the ramp at the handles so warm->cool lands exactly across the band
+      this._els.grad.setAttribute("x1", kLo.x);
+      this._els.grad.setAttribute("y1", kLo.y);
+      this._els.grad.setAttribute("x2", kHi.x);
+      this._els.grad.setAttribute("y2", kHi.y);
 
-      const dp = this._step < 1 ? 1 : 0;
+      this._els.knobLo.setAttribute("cx", kLo.x);
+      this._els.knobLo.setAttribute("cy", kLo.y);
+      this._els.knobLo.setAttribute("r", "10");
+      this._els.knobHi.setAttribute("cx", kHi.x);
+      this._els.knobHi.setAttribute("cy", kHi.y);
+      this._els.knobHi.setAttribute("r", "10");
+
+      this._els.target.classList.add("range");
       this._els.target.innerHTML =
-        `${target.toFixed(dp)}<sup>${unit}</sup>`;
+        `<span class="lo">${v.low.toFixed(dp)}</span>` +
+        `<span class="dash">–</span>` +
+        `<span class="hi">${v.high.toFixed(dp)}</span><sup>${unit}</sup>`;
     }
 
     const action = s.attributes.hvac_action;
