@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.4.0";
+const VERSION = "2.4.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -242,18 +242,40 @@ class HapticThermostatCard extends HTMLElement {
         /* isolation: the orbs use mix-blend-mode, and on a translucent tile
          * they would otherwise blend with whatever the dashboard has behind the
          * card. Isolating .bg makes them blend only against the tinted glass. */
-        .bg { position: absolute; inset: 0; isolation: isolate; }
+        .bg {
+          position: absolute; inset: 0; isolation: isolate;
+          /* Match the card's own radius so the blur region and the bevel both
+           * curve with the corners instead of being square shapes clipped by
+           * overflow:hidden - the clipping is exactly what reduced the old rim
+           * to straight lines on two edges. */
+          border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
+        }
         .bg.glass {
           backdrop-filter: blur(20px) saturate(1.7);
           -webkit-backdrop-filter: blur(20px) saturate(1.7);
         }
-        /* The glass rim: a hairline border and a soft top-edge light catch,
-         * above the orbs, below the content. */
+        /* The bevel proper. Inset box-shadows follow border-radius natively,
+         * which is what makes these read as rounded glass edges rather than
+         * drawn lines: a hairline all the way round, a bright refraction on the
+         * top-left curvature, a thinner lip on the bottom-right, a dark inner
+         * depth opposite the light, and a wide faint bloom filling the slab. */
         .bg.glass::after {
           content: ""; position: absolute; inset: 0; pointer-events: none;
-          border: 1px solid rgba(255,255,255,.22);
-          background: linear-gradient(175deg, rgba(255,255,255,.20), rgba(255,255,255,0) 30%);
           z-index: 1;
+          border-radius: inherit;
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.13),
+            inset 1.5px 3px 3px rgba(255,255,255,.40),
+            inset -1px -1.5px 2px rgba(255,255,255,.20),
+            inset -3px -5px 8px rgba(0,0,0,.16),
+            inset 2px 6px 20px rgba(255,255,255,.09);
+        }
+        /* Light entering the slab: a corner bloom, not an edge stripe. */
+        .bg.glass::before {
+          content: ""; position: absolute; inset: 0; pointer-events: none;
+          z-index: 1;
+          border-radius: inherit;
+          background: radial-gradient(120% 65% at 14% -10%, rgba(255,255,255,.22), transparent 55%);
         }
         .blob {
           position: absolute; width: 130%; aspect-ratio: 1;
