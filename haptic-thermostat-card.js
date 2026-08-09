@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -123,7 +123,8 @@ class HapticThermostatCard extends HTMLElement {
       throw new Error("haptic-thermostat-card: entity must be a climate.* entity");
     }
     this._config = Object.assign(
-      { name: null, min: null, max: null, step: null, modes: true },
+      { name: null, min: null, max: null, step: null, modes: true,
+        animation: true, animation_speed: 8 },
       config
     );
     this._built = false;
@@ -226,14 +227,21 @@ class HapticThermostatCard extends HTMLElement {
            * here and the colours are applied via style.backgroundImage in JS -
            * assigning the 'background' shorthand would reset this back to auto
            * and the animation would have nothing to move. */
-          background-size: 240% 240%;
+          background-size: 300% 300%;
           background-position: 0% 50%;
-          animation: drift 16s ease-in-out infinite alternate;
+          animation: drift var(--drift-speed, 8s) linear infinite;
         }
+        /* A circular sweep rather than a straight slide - the gradient travels
+         * through all four edges, so the movement is visible instead of reading
+         * as a slow fade. */
         @keyframes drift {
-          from { background-position: 0% 50%; }
-          to   { background-position: 100% 50%; }
+          0%   { background-position:   0%  50%; }
+          25%  { background-position:  50%   0%; }
+          50%  { background-position: 100%  50%; }
+          75%  { background-position:  50% 100%; }
+          100% { background-position:   0%  50%; }
         }
+        ha-card.no-anim { animation: none; }
         /* It is a published card - don't animate at people who asked not to. */
         @media (prefers-reduced-motion: reduce) {
           ha-card { animation: none; }
@@ -282,6 +290,16 @@ class HapticThermostatCard extends HTMLElement {
     this._tEls.card.addEventListener("click", () => this.openPanel());
   }
 
+  /* Speed and on/off are config-driven so the animation can be tuned or killed
+   * without touching the card. A speed of 0 (or animation:false) stops it. */
+  _applyAnimation() {
+    const c = this._tEls.card;
+    const spd = Number(this._config.animation_speed);
+    const on = this._config.animation !== false && !(spd === 0);
+    c.classList.toggle("no-anim", !on);
+    if (on) c.style.setProperty("--drift-speed", `${spd > 0 ? spd : 8}s`);
+  }
+
   _renderTile() {
     if (!this._tEls) return;
     const s = this._s;
@@ -291,6 +309,7 @@ class HapticThermostatCard extends HTMLElement {
 
     if (!s || s.state === "unavailable" || s.state === "unknown") {
       this._tEls.card.style.backgroundImage = "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
+      this._applyAnimation();
       this._tEls.big.innerHTML = `<span class="unavail">${s ? s.state : "not found"}</span>`;
       this._tEls.sub.textContent = this._config.entity;
       return;
@@ -299,6 +318,7 @@ class HapticThermostatCard extends HTMLElement {
     const [c0, c1, c2] = this._tileShade;
     this._tEls.card.style.backgroundImage =
       `linear-gradient(150deg, ${c0} 0%, ${c1} 45%, ${c2} 100%)`;
+    this._applyAnimation();
 
     // Current temperature is the glanceable number, as on the Home tile.
     const cur = s.attributes.current_temperature;

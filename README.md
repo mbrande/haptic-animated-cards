@@ -99,8 +99,19 @@ Or paste the YAML directly:
 ```yaml
 type: custom:haptic-thermostat-card
 entity: climate.your_thermostat
-name: House
+name: House            # optional, defaults to the entity's friendly name
+animation: true        # optional, set false to stop the gradient drifting
+animation_speed: 8     # optional, seconds per cycle. Lower = faster. 0 = off
+modes: true            # optional, set false to hide the HVAC mode selector
+min: 45                # optional, defaults to the entity's min_temp
+max: 95                # optional, defaults to the entity's max_temp
+step: 1                # optional, defaults to target_temp_step
 ```
+
+The tile's gradient drifts slowly by default. `animation_speed: 3` makes it
+obvious, `animation_speed: 30` makes it barely perceptible, and `animation: false`
+stops it entirely. The card also honours `prefers-reduced-motion` regardless of
+this setting.
 
 ## Config
 
