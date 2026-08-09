@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.1.7";
+const VERSION = "3.1.8";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -858,8 +858,14 @@ class HapticThermostatCard extends HTMLElement {
     svg.addEventListener("pointercancel", (e) => this._up(e));
 
     document.addEventListener("keydown", this._onKey);
+    // Locking body scroll removes the desktop scrollbar, which widens the
+    // viewport and shifts the whole page sideways for the panel's lifetime.
+    // Measure the scrollbar and hold its width as padding so nothing moves.
+    const sw = window.innerWidth - document.documentElement.clientWidth;
     this._prevOverflow = document.body.style.overflow;
+    this._prevPadR = document.body.style.paddingRight;
     document.body.style.overflow = "hidden";
+    if (sw > 0) document.body.style.paddingRight = sw + "px";
 
     this._renderDial(this._pEls);
 
@@ -882,6 +888,7 @@ class HapticThermostatCard extends HTMLElement {
     this._pending = null;
     document.removeEventListener("keydown", this._onKey);
     document.body.style.overflow = this._prevOverflow || "";
+    document.body.style.paddingRight = this._prevPadR || "";
     // Remove only after the fade-out has finished, or it vanishes instantly.
     if (back) back.classList.remove("in");
     setTimeout(() => host.remove(), 620);   // must outlast the .56s fade
