@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.1.0";
+const VERSION = "3.1.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1252,23 +1252,23 @@ class HapticTempPill extends HTMLElement {
         .content {
           position: relative; z-index: 1;
           height: 100%; box-sizing: border-box;
-          display: flex; align-items: center; gap: 14px;
-          padding: 12px 16px;
+          display: flex; align-items: center; gap: 12px;
+          padding: 8px 14px;
         }
         .ic {
-          width: 40px; height: 40px; border-radius: 50%; flex: none;
+          width: 34px; height: 34px; border-radius: 50%; flex: none;
           background: rgba(255,255,255,.22);
           display: grid; place-items: center;
         }
-        .ic svg { width: 22px; height: 22px; fill: #fff; }
+        .ic svg { width: 19px; height: 19px; fill: #fff; }
         .tx { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
         .nm {
-          font-size: 16px; font-weight: 600; letter-spacing: .2px;
+          font-size: 15px; font-weight: 600; letter-spacing: .2px;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
           text-shadow: 0 1px 2px rgba(0,0,0,.18);
         }
         .vl {
-          font-size: 14px; font-weight: 500; opacity: .95;
+          font-size: 13px; font-weight: 500; opacity: .95;
           font-feature-settings: "tnum";
           text-shadow: 0 1px 2px rgba(0,0,0,.18);
         }
