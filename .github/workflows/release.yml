@@ -1,0 +1,51 @@
+name: Release
+
+# HACS reads GitHub *releases*, not tags. Rather than creating each one by hand
+# in the web UI, pushing a v* tag makes the repo release itself using the
+# built-in GITHUB_TOKEN - so no personal access token ever has to exist or be
+# stored anywhere.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v1.6.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release with the card attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists - uploading asset only"
+            gh release upload "$TAG" haptic-thermostat-card.js --clobber
+          else
+            gh release create "$TAG" haptic-thermostat-card.js \
+              --title "$TAG" \
+              --generate-notes
+          fi
