@@ -22,7 +22,7 @@
  * No build step, no dependencies, plain custom element + Shadow DOM.
  */
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent - the detail
  * is assigned as a property after construction, matching the frontend. */
@@ -45,14 +45,21 @@ const haptic = (type) => fireEvent(window, "haptic", type);
 const START_ANGLE = 135;
 const SWEEP = 270;
 
-/* [deep, light] per state. The arc is stroked with a gradient between the two;
- * deep sits at the bottom of the dial, light at the top. */
+/* Multi-stop ramps, matched to the iOS Home dial.
+ *
+ * The important part is that it is NOT a simple dark->light ramp. Apple runs a
+ * pale, almost-white highlight band roughly two thirds of the way along the arc
+ * and comes back to saturated colour at the end, which reads as a sheen on a
+ * glossy ring. A two-stop gradient looks flat next to it.
+ *
+ * Offsets are along the gradient axis, which is laid diagonally bottom-left ->
+ * top-right so it tracks the direction the arc actually travels. */
 const RAMPS = {
-  heat: ["#FF6B00", "#FFB340"],
-  cool: ["#0A84FF", "#64D2FF"],
-  dry: ["#FFB800", "#FFE680"],
-  fan: ["#32ADE6", "#A0E9FF"],
-  idle: ["#8E8E93", "#C7C7CC"],
+  heat: [[0, "#FF5E00"], [0.44, "#FFC66B"], [0.63, "#FFEDCB"], [1, "#FF9F0A"]],
+  cool: [[0, "#0A84FF"], [0.44, "#8FD0F5"], [0.63, "#DCF3F8"], [1, "#4C9BFF"]],
+  dry: [[0, "#FFB800"], [0.5, "#FFEBB0"], [1, "#FFC93C"]],
+  fan: [[0, "#32ADE6"], [0.5, "#CFF3FF"], [1, "#5EC8F0"]],
+  idle: [[0, "#6E6E73"], [0.5, "#C7C7CC"], [1, "#8E8E93"]],
 };
 
 const polar = (cx, cy, r, angleDeg) => {
@@ -145,16 +152,32 @@ class IosThermostatCard extends HTMLElement {
   /* Colour follows what the system is DOING (hvac_action) when available, and
    * falls back to what it is set to. Matches the iOS behaviour where the ring
    * is orange only while actually heating. */
-  get _ramp() {
+  get _rampKey() {
     const s = this._stateObj;
-    if (!s || s.state === "off" || s.state === "unavailable") return RAMPS.idle;
+    if (!s || s.state === "off" || s.state === "unavailable") return "idle";
     const action = s.attributes.hvac_action;
     const basis = action && action !== "idle" ? action : s.state;
-    if (basis === "heating" || basis === "heat") return RAMPS.heat;
-    if (basis === "cooling" || basis === "cool") return RAMPS.cool;
-    if (basis === "drying" || basis === "dry") return RAMPS.dry;
-    if (basis === "fan" || basis === "fan_only") return RAMPS.fan;
-    return RAMPS.idle;
+    if (basis === "heating" || basis === "heat") return "heat";
+    if (basis === "cooling" || basis === "cool") return "cool";
+    if (basis === "drying" || basis === "dry") return "dry";
+    if (basis === "fan" || basis === "fan_only") return "fan";
+    return "idle";
+  }
+
+  /* Rebuild the gradient stops only when the ramp actually changes - _render()
+   * runs on every state update and re-creating four SVG nodes each time is
+   * pointless churn. */
+  _applyRamp(key) {
+    if (this._appliedRamp === key) return;
+    this._appliedRamp = key;
+    const grad = this._els.grad;
+    while (grad.firstChild) grad.removeChild(grad.firstChild);
+    for (const [offset, colour] of RAMPS[key]) {
+      const stop = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+      stop.setAttribute("offset", `${offset * 100}%`);
+      stop.setAttribute("stop-color", colour);
+      grad.appendChild(stop);
+    }
   }
 
   /* ---------- build ---------- */
@@ -209,12 +232,13 @@ class IosThermostatCard extends HTMLElement {
         <div class="wrap">
           <svg viewBox="0 0 200 200" aria-label="Temperature dial">
             <defs>
-              <!-- userSpaceOnUse so the ramp stays anchored to the dial while the
-                   arc grows, instead of re-scaling to the arc's bounding box. -->
+              <!-- Axis runs bottom-left -> top-right, following the direction the
+                   arc travels, so the ramp reads along the ring rather than across
+                   it. userSpaceOnUse keeps it anchored to the dial while the arc
+                   grows; the default bounding-box mode would rescale the ramp to
+                   the arc's own box and slide the colours under your finger. -->
               <linearGradient id="${g}" gradientUnits="userSpaceOnUse"
-                              x1="100" y1="186" x2="100" y2="14">
-                <stop class="g0" offset="0%"></stop>
-                <stop class="g1" offset="100%"></stop>
+                              x1="26" y1="174" x2="174" y2="26">
               </linearGradient>
             </defs>
             <path class="track" fill="none" stroke-width="14" stroke-linecap="round"></path>
@@ -241,9 +265,9 @@ class IosThermostatCard extends HTMLElement {
       mode: this.shadowRoot.querySelector(".mode"),
       target: this.shadowRoot.querySelector(".target"),
       current: this.shadowRoot.querySelector(".current"),
-      g0: this.shadowRoot.querySelector(".g0"),
-      g1: this.shadowRoot.querySelector(".g1"),
+      grad: this.shadowRoot.querySelector("linearGradient"),
     };
+    this._appliedRamp = null;
 
     const svg = this._els.svg;
     svg.addEventListener("pointerdown", (e) => this._onDown(e));
@@ -338,11 +362,11 @@ class IosThermostatCard extends HTMLElement {
     }
 
     const target = this._target;
-    const [deep, light] = this._ramp;
+    const rampKey = this._rampKey;
+    const deep = RAMPS[rampKey][0][1];   // first stop, used for the mode label
     const unit = this._hass.config.unit_system.temperature || "°";
 
-    this._els.g0.setAttribute("stop-color", deep);
-    this._els.g1.setAttribute("stop-color", light);
+    this._applyRamp(rampKey);
 
     this._els.track.setAttribute(
       "d",
