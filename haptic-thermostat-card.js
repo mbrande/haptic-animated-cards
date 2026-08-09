@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.4.1";
+const VERSION = "2.4.2";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -251,8 +251,8 @@ class HapticThermostatCard extends HTMLElement {
           border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
         }
         .bg.glass {
-          backdrop-filter: blur(20px) saturate(1.7);
-          -webkit-backdrop-filter: blur(20px) saturate(1.7);
+          backdrop-filter: blur(26px) saturate(1.8) brightness(1.06);
+          -webkit-backdrop-filter: blur(26px) saturate(1.8) brightness(1.06);
         }
         /* The bevel proper. Inset box-shadows follow border-radius natively,
          * which is what makes these read as rounded glass edges rather than
@@ -263,19 +263,26 @@ class HapticThermostatCard extends HTMLElement {
           content: ""; position: absolute; inset: 0; pointer-events: none;
           z-index: 1;
           border-radius: inherit;
+          /* Luminous, not carved: Apple's glass edge is a soft uniform bright
+           * rim with NO dark inner shadow anywhere. A crisp hairline, a soft
+           * white halo hugging it, and a slightly brighter top inner line. */
           box-shadow:
-            inset 0 0 0 1px rgba(255,255,255,.13),
-            inset 1.5px 3px 3px rgba(255,255,255,.40),
-            inset -1px -1.5px 2px rgba(255,255,255,.20),
-            inset -3px -5px 8px rgba(0,0,0,.16),
-            inset 2px 6px 20px rgba(255,255,255,.09);
+            inset 0 0 0 1px rgba(255,255,255,.30),
+            inset 0 0 7px 2px rgba(255,255,255,.13),
+            inset 0 1.5px 1px rgba(255,255,255,.28);
         }
         /* Light entering the slab: a corner bloom, not an edge stripe. */
         .bg.glass::before {
           content: ""; position: absolute; inset: 0; pointer-events: none;
           z-index: 1;
           border-radius: inherit;
-          background: radial-gradient(120% 65% at 14% -10%, rgba(255,255,255,.22), transparent 55%);
+          /* The milk: a white frost wash, brightest at the top, faint again at
+           * the base - this is what makes the slab read as glass rather than a
+           * tinted panel. */
+          background: linear-gradient(180deg,
+            rgba(255,255,255,.20) 0%,
+            rgba(255,255,255,.05) 45%,
+            rgba(255,255,255,.10) 100%);
         }
         .blob {
           position: absolute; width: 130%; aspect-ratio: 1;
@@ -473,9 +480,9 @@ class HapticThermostatCard extends HTMLElement {
     this._tEls.bg.classList.toggle("glass", glass);
     // Middle stop most transparent: the tint holds its colour at the edges and
     // lets the dashboard show through the centre - that is the liquid look.
-    const s0 = glass ? hexRgba(c0, .72) : c0;
-    const s1 = glass ? hexRgba(c1, .52) : c1;
-    const s2 = glass ? hexRgba(c2, .72) : c2;
+    const s0 = glass ? hexRgba(c0, .58) : c0;
+    const s1 = glass ? hexRgba(c1, .40) : c1;
+    const s2 = glass ? hexRgba(c2, .58) : c2;
     this._tEls.bg.style.backgroundImage =
       `linear-gradient(150deg, ${s0} 0%, ${s1} 45%, ${s2} 100%)`;
     this._setModeClass(this._rampKey);
