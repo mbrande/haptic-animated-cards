@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.3.4";
+const VERSION = "2.3.5";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -621,14 +621,18 @@ class HapticThermostatCard extends HTMLElement {
 
   /* ---------- interaction ---------- */
 
-  _tempFromPointer(evt) {
+  _geom(evt) {
     const r = this._pEls.svg.getBoundingClientRect();
     const x = ((evt.clientX - r.left) / r.width) * 200 - 100;
     const y = ((evt.clientY - r.top) / r.height) * 200 - 100;
     let deg = (Math.atan2(y, x) * 180) / Math.PI;
     if (deg < 0) deg += 360;
     if (deg < START_ANGLE) deg += 360;
-    const frac = clamp((deg - START_ANGLE) / SWEEP, 0, 1);
+    return { dist: Math.hypot(x, y), rawFrac: (deg - START_ANGLE) / SWEEP };
+  }
+
+  _tempFromPointer(evt) {
+    const frac = clamp(this._geom(evt).rawFrac, 0, 1);
     const raw = this._min + frac * (this._max - this._min);
     return clamp(Math.round(raw / this._step) * this._step, this._min, this._max);
   }
@@ -638,6 +642,15 @@ class HapticThermostatCard extends HTMLElement {
     if (!s || s.state === "unavailable") return;
     const v = this._values;
     if (!v) return;
+    // Only begin a drag if the touch actually lands on the ring. The SVG is a
+    // full-width rectangle, and without this guard a tap in its empty bottom
+    // gap - exactly where the mode selector sits, pulled up by the negative
+    // margin - mapped to ~90deg, wrapped past the end of the sweep, clamped to
+    // frac=1 and slammed the setpoint to MAX on release. A radial band around
+    // the ring plus a small angular tolerance keeps ring taps and end-stop
+    // grabs working while ignoring everything else.
+    const g = this._geom(evt);
+    if (Math.abs(g.dist - R) > 34 || g.rawFrac < -0.06 || g.rawFrac > 1.06) return;
     this._dragging = true;
     this._pEls.svg.setPointerCapture(evt.pointerId);
     this._lastHapticStep = null;
