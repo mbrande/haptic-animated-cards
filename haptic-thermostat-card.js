@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.2.0";
+const VERSION = "2.2.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -211,29 +211,29 @@ class HapticThermostatCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; height: 100%; }
-        /* Fill the grid cell rather than imposing our own shape. aspect-ratio:1/1
-         * fights grid_options.rows: the row count fixes the height, the ratio
-         * fixes it again from the width, and when they disagree the card
-         * overflows and paints over its neighbour. Let the grid decide. */
+        /* The gradient and its animation live on our OWN element, not on
+         * <ha-card>. ha-card's :host rule sets the 'background' SHORTHAND, which
+         * resets background-size to auto - so an animation on background-position
+         * runs but has nothing to travel across, and looks like nothing happens.
+         * Owning the painted layer sidesteps the cross-shadow cascade entirely. */
         ha-card {
+          position: relative; overflow: hidden;
           height: 100%; box-sizing: border-box;
-          border: none; overflow: hidden;
-          display: flex; flex-direction: column; justify-content: space-between;
-          padding: 16px 18px;
+          border: none; padding: 0;
           cursor: pointer;
           transition: transform .18s ease, filter .18s ease;
           color: #fff;
-          /* Oversized so there is somewhere to drift to. background-size is set
-           * here and the colours are applied via style.backgroundImage in JS -
-           * assigning the 'background' shorthand would reset this back to auto
-           * and the animation would have nothing to move. */
+        }
+        ha-card:active { transform: scale(.97); filter: brightness(1.08); }
+        .bg {
+          position: absolute; inset: 0;
           background-size: 300% 300%;
           background-position: 0% 50%;
           animation: drift var(--drift-speed, 8s) linear infinite;
         }
+        .bg.no-anim { animation: none; }
         /* A circular sweep rather than a straight slide - the gradient travels
-         * through all four edges, so the movement is visible instead of reading
-         * as a slow fade. */
+         * through all four edges, so the movement is visible. */
         @keyframes drift {
           0%   { background-position:   0%  50%; }
           25%  { background-position:  50%   0%; }
@@ -241,12 +241,15 @@ class HapticThermostatCard extends HTMLElement {
           75%  { background-position:  50% 100%; }
           100% { background-position:   0%  50%; }
         }
-        ha-card.no-anim { animation: none; }
-        /* It is a published card - don't animate at people who asked not to. */
         @media (prefers-reduced-motion: reduce) {
-          ha-card { animation: none; }
+          .bg { animation: none; }
         }
-        ha-card:active { transform: scale(.97); filter: brightness(1.08); }
+        .content {
+          position: relative; z-index: 1;
+          height: 100%; box-sizing: border-box;
+          padding: 16px 18px;
+          display: flex; flex-direction: column; justify-content: space-between;
+        }
         .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .top svg { width: 20px; height: 20px; flex: none; opacity: .95; }
         .nm {
@@ -268,6 +271,8 @@ class HapticThermostatCard extends HTMLElement {
         .unavail { font-size: 15px; font-weight: 600; }
       </style>
       <ha-card>
+        <div class="bg"></div>
+        <div class="content">
         <div class="top">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 13V5a3 3 0 0 0-6 0v8a5 5 0 1 0 6 0zm-3-9a1 1 0 0 1 1 1v8.6l.5.3a3 3 0 1 1-3 0l.5-.3V5a1 1 0 0 1 1-1z"/></svg>
           <div class="nm"></div>
@@ -276,10 +281,12 @@ class HapticThermostatCard extends HTMLElement {
           <div class="big"></div>
           <div class="sub"></div>
         </div>
+        </div>
       </ha-card>
     `;
     this._tEls = {
       card: this.shadowRoot.querySelector("ha-card"),
+      bg: this.shadowRoot.querySelector(".bg"),
       nm: this.shadowRoot.querySelector(".nm"),
       big: this.shadowRoot.querySelector(".big"),
       sub: this.shadowRoot.querySelector(".sub"),
@@ -293,7 +300,7 @@ class HapticThermostatCard extends HTMLElement {
   /* Speed and on/off are config-driven so the animation can be tuned or killed
    * without touching the card. A speed of 0 (or animation:false) stops it. */
   _applyAnimation() {
-    const c = this._tEls.card;
+    const c = this._tEls.bg;
     const spd = Number(this._config.animation_speed);
     const on = this._config.animation !== false && !(spd === 0);
     c.classList.toggle("no-anim", !on);
@@ -308,7 +315,7 @@ class HapticThermostatCard extends HTMLElement {
       this._config.name ?? (s ? s.attributes.friendly_name : this._config.entity);
 
     if (!s || s.state === "unavailable" || s.state === "unknown") {
-      this._tEls.card.style.backgroundImage = "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
+      this._tEls.bg.style.backgroundImage = "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
       this._applyAnimation();
       this._tEls.big.innerHTML = `<span class="unavail">${s ? s.state : "not found"}</span>`;
       this._tEls.sub.textContent = this._config.entity;
@@ -316,7 +323,7 @@ class HapticThermostatCard extends HTMLElement {
     }
 
     const [c0, c1, c2] = this._tileShade;
-    this._tEls.card.style.backgroundImage =
+    this._tEls.bg.style.backgroundImage =
       `linear-gradient(150deg, ${c0} 0%, ${c1} 45%, ${c2} 100%)`;
     this._applyAnimation();
 
