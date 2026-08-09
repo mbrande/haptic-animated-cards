@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.4.2";
+const VERSION = "3.0.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -105,6 +105,31 @@ const MODE_LABEL = {
   auto: "Auto", dry: "Dry", fan_only: "Fan",
 };
 
+/* Orb palettes for the shader - same families the CSS layers use. */
+const LQ_ORBS = {
+  cool: ["#9BE8FF", "#2E6BFF", "#032A66"],
+  heat: ["#FFD27A", "#FF5A00", "#7A1600"],
+  dry: ["#FFE9A6", "#FFB800", "#7A5200"],
+  fan: ["#CFF3FF", "#32ADE6", "#08506E"],
+  idle: ["#D0D0D4", "#86868C", "#2C2C30"],
+  range: ["#FFB35C", "#4C9BFF", "#24144A"],
+};
+
+const hexV = (h) => {
+  const n = parseInt(h.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+};
+
+/* The liquid material, as a fragment shader. Renders the tint gradient, the
+ * drifting orbs, the comet sheen, the milk wash and the luminous rim in one
+ * pass - and bends the sampling of all of it near the rounded edge using the
+ * slab SDF normal, with the R/G/B channels bent by slightly different
+ * amounts. That bend is the refraction CSS cannot do, and the channel split
+ * is the chromatic fringe real glass has. Alpha is premultiplied; the canvas
+ * composites over the SAME backdrop-filter blur the CSS glass uses, so the
+ * real wallpaper still shows through underneath. */
+const LQ_FRAG = 'precision mediump float;\nuniform vec2 u_res;\nuniform float u_t, u_rad, u_dpr, u_tempo;\nuniform vec3 u_c0, u_c1, u_c2, u_o1, u_o2, u_o3;\nuniform vec4 u_seed;\n\nfloat sdb(vec2 p, vec2 b, float r) {\n  vec2 q = abs(p) - b + r;\n  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n}\nfloat orb(vec2 uv, vec2 c, float rad) {\n  float d = length(uv - c);\n  return exp(-d * d / (rad * rad));\n}\nvec4 material(vec2 uv) {\n  vec2 g = vec2(0.5, 0.866);\n  float gt = clamp(dot(uv - 0.5, g) + 0.5, 0.0, 1.0);\n  vec3 col = gt < 0.45 ? mix(u_c0, u_c1, gt / 0.45)\n                       : mix(u_c1, u_c2, (gt - 0.45) / 0.55);\n  float a = mix(0.40, 0.58, clamp(abs(gt - 0.45) * 1.9, 0.0, 1.0));\n  float t = u_t * u_tempo;\n  vec2 p1 = vec2(0.30, 0.30) + 0.34 * vec2(cos(t * 0.55 + u_seed.x * 6.28), sin(t * 0.42 + u_seed.x * 4.0));\n  vec2 p2 = vec2(0.72, 0.70) + 0.30 * vec2(cos(t * 0.36 + u_seed.y * 6.28), sin(t * 0.61 + u_seed.y * 3.1));\n  vec2 p3 = vec2(0.55, 0.45) + 0.22 * vec2(cos(t * 0.22 + u_seed.z * 6.28), sin(t * 0.17 + u_seed.z * 5.2));\n  float g1 = orb(uv, p1, 0.42);\n  float g2 = orb(uv, p2, 0.46);\n  float g3 = orb(uv, p3, 0.60);\n  col = 1.0 - (1.0 - col) * (1.0 - u_o1 * g1 * 0.62);\n  col = 1.0 - (1.0 - col) * (1.0 - u_o2 * g2 * 0.55);\n  col = mix(col, col * u_o3, g3 * 0.42);\n  a += (g1 + g2) * 0.10;\n  float ph = fract(t / 25.0);\n  float run = smoothstep(0.55, 0.58, ph);\n  float c = mix(-0.7, 1.7, clamp((ph - 0.55) / 0.45, 0.0, 1.0));\n  float w = dot(uv, normalize(vec2(0.94, -0.34))) - c;\n  float sheen = exp(-abs(w) * (w > 0.0 ? 30.0 : 7.5)) * 0.16 * run;\n  col += sheen;\n  float milk = mix(0.20, 0.05, smoothstep(0.0, 0.45, uv.y)) + 0.05 * smoothstep(0.45, 1.0, uv.y);\n  col += milk;\n  a = clamp(a + milk * 0.55 + sheen * 0.4, 0.0, 0.92);\n  return vec4(col, a);\n}\nvoid main() {\n  vec2 px = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y);\n  vec2 hf = u_res * 0.5;\n  vec2 p = px - hf;\n  float rad = min(u_rad, min(hf.x, hf.y));\n  float d = sdb(p, hf - 1.0, rad);\n  float e = 1.5 * u_dpr;\n  vec2 n = normalize(vec2(\n    sdb(p + vec2(e, 0.0), hf - 1.0, rad) - sdb(p - vec2(e, 0.0), hf - 1.0, rad),\n    sdb(p + vec2(0.0, e), hf - 1.0, rad) - sdb(p - vec2(0.0, e), hf - 1.0, rad)) + vec2(0.00001));\n  float edge = smoothstep(-26.0 * u_dpr, 0.0, d);\n  float bend = edge * edge * 20.0 * u_dpr;\n  vec4 mr = material((px - n * bend) / u_res);\n  vec4 mg = material((px - n * bend * 1.16) / u_res);\n  vec4 mb = material((px - n * bend * 1.34) / u_res);\n  vec3 col = vec3(mr.r, mg.g, mb.b);\n  float a = (mr.a + mg.a + mb.a) / 3.0;\n  float hair = smoothstep(1.6 * u_dpr, 0.0, abs(d + 1.6 * u_dpr)) * 0.30;\n  float halo = exp(d / (7.0 * u_dpr)) * 0.13;\n  float topl = smoothstep(2.0 * u_dpr, 0.0, abs(d + 2.2 * u_dpr)) * smoothstep(0.15, 0.7, -n.y) * 0.26;\n  col += hair + halo + topl;\n  a = clamp(a + hair + halo * 0.6 + topl, 0.0, 0.95);\n  float inside = smoothstep(0.0, -1.5, d);\n  gl_FragColor = vec4(col, 1.0) * a * inside;\n}\n';
+
 /* ------------------------------------------------------------------ */
 
 class HapticThermostatCard extends HTMLElement {
@@ -120,6 +145,7 @@ class HapticThermostatCard extends HTMLElement {
     this._pEls = null;
     this._gradId = "arc-" + Math.random().toString(36).slice(2, 9);
     this._onKey = (e) => { if (e.key === "Escape") this.closePanel(); };
+    this._lqSeed = [Math.random(), Math.random(), Math.random(), Math.random()];
   }
 
   setConfig(config) {
@@ -131,7 +157,7 @@ class HapticThermostatCard extends HTMLElement {
     }
     this._config = Object.assign(
       { name: null, min: null, max: null, step: null, modes: true,
-        animation: true, animation_speed: 10, glass: true },
+        animation: true, animation_speed: 10, glass: true, liquid: true },
       config
     );
     this._built = false;
@@ -152,6 +178,7 @@ class HapticThermostatCard extends HTMLElement {
     // The panel lives on document.body, so it must be torn down explicitly or it
     // outlives the card when a dashboard view is swapped out.
     this.closePanel();
+    this._lqStop();
   }
 
   get _s() {
@@ -365,6 +392,13 @@ class HapticThermostatCard extends HTMLElement {
         @media (prefers-reduced-motion: reduce) {
           .blob, .sheen { animation: none; }
         }
+        /* The shader canvas replaces the DOM-painted material when liquid
+         * mode is active; the backdrop-filter on .bg stays either way, so the
+         * real wallpaper blur is identical in both engines. */
+        .lq { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+        .bg.liquid .lq { display: block; }
+        .bg.liquid .blob, .bg.liquid .sheen { display: none; }
+        .bg.liquid::before, .bg.liquid::after { display: none; }
         .content {
           position: relative; z-index: 1;
           height: 100%; box-sizing: border-box;
@@ -397,6 +431,7 @@ class HapticThermostatCard extends HTMLElement {
           <div class="blob b2"></div>
           <div class="blob b3"></div>
           <div class="sheen"></div>
+          <canvas class="lq"></canvas>
         </div>
         <div class="content">
         <div class="top">
@@ -413,6 +448,7 @@ class HapticThermostatCard extends HTMLElement {
     this._tEls = {
       card: this.shadowRoot.querySelector("ha-card"),
       bg: this.shadowRoot.querySelector(".bg"),
+      lq: this.shadowRoot.querySelector(".lq"),
       nm: this.shadowRoot.querySelector(".nm"),
       big: this.shadowRoot.querySelector(".big"),
       sub: this.shadowRoot.querySelector(".sub"),
@@ -470,6 +506,7 @@ class HapticThermostatCard extends HTMLElement {
         : "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
       this._setModeClass("idle");
       this._applyAnimation();
+      this._syncLiquid(false, ["#A0A0A6", "#7C7C82", "#4A4A50"]);
       this._tEls.big.innerHTML = `<span class="unavail">${s ? s.state : "not found"}</span>`;
       this._tEls.sub.textContent = this._config.entity;
       return;
@@ -485,6 +522,7 @@ class HapticThermostatCard extends HTMLElement {
     const s2 = glass ? hexRgba(c2, .58) : c2;
     this._tEls.bg.style.backgroundImage =
       `linear-gradient(150deg, ${s0} 0%, ${s1} 45%, ${s2} 100%)`;
+    this._syncLiquid(glass, [c0, c1, c2]);
     this._setModeClass(this._rampKey);
     this._applyAnimation();
 
@@ -502,6 +540,166 @@ class HapticThermostatCard extends HTMLElement {
     else if (v) target = ` ${v.low.toFixed(dp)}–${v.high.toFixed(dp)}${unit}`;
     this._tEls.sub.textContent = s.state === "off" ? "Off" : mode + target;
   }
+
+  /* ---------- liquid renderer ---------- */
+
+  _lqSupported() {
+    if (this._lqOk !== undefined) return this._lqOk;
+    try {
+      const c = document.createElement("canvas");
+      this._lqOk = !!(c.getContext("webgl") || c.getContext("experimental-webgl"));
+    } catch (e) { this._lqOk = false; }
+    return this._lqOk;
+  }
+
+  _syncLiquid(on, cols) {
+    const want = on && this._config.liquid !== false && this._lqSupported();
+    this._tEls.bg.classList.toggle("liquid", want);
+    if (!want) { this._lqStop(); return; }
+    const key = this._rampKey;
+    const o = LQ_ORBS[key] || LQ_ORBS.idle;
+    this._lqCols = { c0: hexV(cols[0]), c1: hexV(cols[1]), c2: hexV(cols[2]),
+                     o1: hexV(o[0]), o2: hexV(o[1]), o3: hexV(o[2]) };
+    this._lqTempo = key === "heat" ? 0.62 : 1.0;
+    this._lqStart();
+    this._lqKick();
+  }
+
+  _lqStart() {
+    if (this._lq) return;
+    const canvas = this._tEls.lq;
+    let gl = null;
+    try {
+      gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false })
+        || canvas.getContext("experimental-webgl", { alpha: true, premultipliedAlpha: true });
+    } catch (e) { /* fall through to css glass */ }
+    if (!gl) { this._lqOk = false; this._tEls.bg.classList.remove("liquid"); return; }
+    const mk = (type, src) => {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.warn("haptic-thermostat-card: shader compile failed", gl.getShaderInfoLog(sh));
+        return null;
+      }
+      return sh;
+    };
+    const v = mk(gl.VERTEX_SHADER, "attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}");
+    const f = mk(gl.FRAGMENT_SHADER, LQ_FRAG);
+    if (!v || !f) { this._lqOk = false; this._tEls.bg.classList.remove("liquid"); return; }
+    const prog = gl.createProgram();
+    gl.attachShader(prog, v);
+    gl.attachShader(prog, f);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      this._lqOk = false;
+      this._tEls.bg.classList.remove("liquid");
+      return;
+    }
+    gl.useProgram(prog);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, "p");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    const U = {};
+    for (const nm of ["u_res", "u_t", "u_rad", "u_dpr", "u_tempo",
+                      "u_c0", "u_c1", "u_c2", "u_o1", "u_o2", "u_o3", "u_seed"]) {
+      U[nm] = gl.getUniformLocation(prog, nm);
+    }
+    this._lq = { gl, U, canvas, t0: performance.now(), raf: 0,
+                 visible: !document.hidden, onscreen: true, dpr: 1, rad: 12 };
+    // Battery guards: no frames while the tab is hidden or the card has
+    // scrolled out of view. A single static frame is drawn on re-entry.
+    this._lqVis = () => {
+      if (this._lq) { this._lq.visible = !document.hidden; this._lqKick(); }
+    };
+    document.addEventListener("visibilitychange", this._lqVis);
+    this._lqIO = new IntersectionObserver((es) => {
+      if (this._lq) { this._lq.onscreen = es[0].isIntersecting; this._lqKick(); }
+    });
+    this._lqIO.observe(this);
+    this._lqRO = new ResizeObserver(() => this._lqSize());
+    this._lqRO.observe(canvas);
+    this._lqSize();
+  }
+
+  _lqSize() {
+    const L = this._lq;
+    if (!L) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(L.canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(L.canvas.clientHeight * dpr));
+    if (L.canvas.width !== w || L.canvas.height !== h) {
+      L.canvas.width = w;
+      L.canvas.height = h;
+      L.gl.viewport(0, 0, w, h);
+    }
+    L.dpr = dpr;
+    L.rad = (parseFloat(getComputedStyle(this._tEls.bg).borderRadius) || 12) * dpr;
+    this._lqFrame();
+  }
+
+  _lqKick() {
+    const L = this._lq;
+    if (!L) return;
+    cancelAnimationFrame(L.raf);
+    if (!L.visible || !L.onscreen) return;
+    const spd = Number(this._config.animation_speed);
+    const animOn = this._config.animation !== false && spd !== 0;
+    const loop = () => {
+      this._lqFrame();
+      if (animOn && this._lq) L.raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+
+  _lqFrame() {
+    const L = this._lq;
+    if (!L || !this._lqCols) return;
+    const gl = L.gl, U = L.U;
+    const spd = Number(this._config.animation_speed);
+    const scale = 10 / (spd > 0 ? spd : 10);
+    const animOn = this._config.animation !== false && spd !== 0;
+    const t = animOn
+      ? ((performance.now() - L.t0) / 1000) * scale
+      : 3.7 + this._lqSeed[3] * 20.0;
+    gl.uniform2f(U.u_res, L.canvas.width, L.canvas.height);
+    gl.uniform1f(U.u_t, t);
+    gl.uniform1f(U.u_rad, L.rad);
+    gl.uniform1f(U.u_dpr, L.dpr);
+    gl.uniform1f(U.u_tempo, this._lqTempo || 1);
+    const C = this._lqCols;
+    gl.uniform3fv(U.u_c0, C.c0);
+    gl.uniform3fv(U.u_c1, C.c1);
+    gl.uniform3fv(U.u_c2, C.c2);
+    gl.uniform3fv(U.u_o1, C.o1);
+    gl.uniform3fv(U.u_o2, C.o2);
+    gl.uniform3fv(U.u_o3, C.o3);
+    gl.uniform4fv(U.u_seed, this._lqSeed);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  _lqStop() {
+    if (this._lqIO) { this._lqIO.disconnect(); this._lqIO = null; }
+    if (this._lqRO) { this._lqRO.disconnect(); this._lqRO = null; }
+    if (this._lqVis) {
+      document.removeEventListener("visibilitychange", this._lqVis);
+      this._lqVis = null;
+    }
+    if (this._lq) {
+      cancelAnimationFrame(this._lq.raf);
+      const ext = this._lq.gl.getExtension("WEBGL_lose_context");
+      if (ext) ext.loseContext();
+      this._lq = null;
+    }
+  }
+
 
   /* ---------- panel (the expanded dial) ---------- */
 
