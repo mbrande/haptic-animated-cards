@@ -61,16 +61,46 @@ Android maps them onto whatever vibration motor the device has.
 
 ## Install
 
-**HACS (custom repository)** — HACS → three-dot menu → Custom repositories → add
-this repo's URL with category **Dashboard**, then install and add the resource.
+### HACS (recommended)
 
-**Manual** — copy `haptic-thermostat-card.js` into `/config/www/`, then add a
-dashboard resource of type **JavaScript module** pointing at
-`/local/haptic-thermostat-card.js`.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mbrande&repository=haptic-thermostat-card&category=plugin)
 
-⚠️ Home Assistant caches `/local/` aggressively. When you update the file, change
-the `?v=` on the resource URL or you will be testing the old copy and conclude
-your change did nothing.
+Or add it by hand:
+
+1. Open **HACS** in Home Assistant
+2. Top-right **⋮** menu → **Custom repositories**
+3. **Repository:** `https://github.com/mbrande/haptic-thermostat-card`
+4. **Type:** `Dashboard`
+5. Click **Add**, then find **Haptic Thermostat Card** in the HACS list and click
+   **Download**
+
+**HACS registers the dashboard resource for you** — there is nothing else to add.
+
+No Home Assistant restart is needed, but **force-close and reopen the companion
+app** (or hard-refresh the browser) so the new resource actually loads.
+
+### Manual
+
+1. Copy `haptic-thermostat-card.js` into `/config/www/haptic-thermostat-card/`
+2. **Settings → Dashboards → ⋮ → Resources → Add resource**
+   * **URL:** `/local/haptic-thermostat-card/haptic-thermostat-card.js?v=1`
+   * **Type:** `JavaScript module`
+
+> ⚠️ `/local/` is cached for a long time. When you update the file you **must**
+> change the `?v=` number, or you will be running the old copy and concluding your
+> change did nothing.
+
+### Add the card to a dashboard
+
+Edit a dashboard → **Add card** → search for **Haptic Thermostat Card**.
+
+Or paste the YAML directly:
+
+```yaml
+type: custom:haptic-thermostat-card
+entity: climate.your_thermostat
+name: House
+```
 
 ## Config
 
