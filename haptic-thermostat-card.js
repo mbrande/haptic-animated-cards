@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.0.1";
+const VERSION = "2.0.2";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -206,9 +206,13 @@ class HapticThermostatCard extends HTMLElement {
     this._built = true;
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display: block; }
+        :host { display: block; height: 100%; }
+        /* Fill the grid cell rather than imposing our own shape. aspect-ratio:1/1
+         * fights grid_options.rows: the row count fixes the height, the ratio
+         * fixes it again from the width, and when they disagree the card
+         * overflows and paints over its neighbour. Let the grid decide. */
         ha-card {
-          aspect-ratio: 1 / 1;
+          height: 100%; box-sizing: border-box;
           border: none; overflow: hidden;
           display: flex; flex-direction: column; justify-content: space-between;
           padding: 16px 18px;
@@ -307,16 +311,24 @@ class HapticThermostatCard extends HTMLElement {
     const g = this._gradId;
     host.shadowRoot.innerHTML = `
       <style>
-        :host { all: initial; }
+        :host { all: initial; display: block; }
+        /* The blur lives on a child, not on .back. Animating opacity on an
+         * element that also carries backdrop-filter is a known WebKit trap - the
+         * transition gets dropped or renders badly. Separating them keeps the
+         * animated property plain. pointer-events:none so backdrop clicks still
+         * land on .back. */
         .back {
           position: fixed; inset: 0; z-index: 99999;
-          background: rgba(0,0,0,.55);
-          backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           display: flex; align-items: center; justify-content: center;
-          opacity: 0; transition: opacity .28s ease;
+          opacity: 0; transition: opacity .28s ease; will-change: opacity;
           font-family: var(--ha-font-family-body, system-ui, -apple-system, sans-serif);
         }
         .back.in { opacity: 1; }
+        .blur {
+          position: absolute; inset: 0; pointer-events: none;
+          background: rgba(0,0,0,.55);
+          backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        }
         /* Straight cross-fade, no scale/pop - backdrop and panel share the same
          * duration and easing so open and close read as one movement. */
         .panel {
@@ -327,7 +339,7 @@ class HapticThermostatCard extends HTMLElement {
           padding: 20px 18px 18px;
           box-shadow: 0 24px 70px rgba(0,0,0,.6);
           opacity: 0;
-          transition: opacity .28s ease;
+          transition: opacity .28s ease; will-change: opacity;
           display: flex; flex-direction: column; align-items: center;
         }
         .back.in .panel { opacity: 1; }
@@ -380,6 +392,7 @@ class HapticThermostatCard extends HTMLElement {
         .sel option { color: initial; background: initial; font-weight: 500; }
       </style>
       <div class="back">
+        <div class="blur"></div>
         <div class="panel" role="dialog" aria-modal="true">
           <div class="hdr"><div class="ttl"></div><button class="x" aria-label="Close">✕</button></div>
           <div class="wrap">
@@ -432,7 +445,14 @@ class HapticThermostatCard extends HTMLElement {
     document.body.style.overflow = "hidden";
 
     this._renderDial(this._pEls);
-    requestAnimationFrame(() => this._pEls.back.classList.add("in"));
+
+    // Force a style flush before flipping the class. A freshly inserted element
+    // has no computed style yet, so setting the final state in the same frame
+    // makes the browser skip straight to it and no transition runs. Reading a
+    // layout property is the reliable way to commit the initial state first -
+    // a single requestAnimationFrame is not enough here.
+    void this._pEls.back.offsetWidth;
+    this._pEls.back.classList.add("in");
   }
 
   closePanel() {
