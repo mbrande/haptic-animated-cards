@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.1.4";
+const VERSION = "3.1.5";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1106,15 +1106,16 @@ customElements.define("haptic-thermostat-card", HapticThermostatCard);
 /* Thermal anchors, in Fahrenheit; values between anchors interpolate in RGB
  * and values beyond the ends clamp. Sensors reporting Celsius are converted
  * for the mapping only - the displayed value keeps its own unit. */
-/* Comfort reads cool: blues hold through the mid-70s, warmth starts past 80,
- * and the deep red lands by the mid-90s - so 74F is a calm blue while 97F and
- * 105F keep the same deep red as before. */
+/* Blues hold through 77F, fade fast into amber by 80, climb through orange
+ * intensities to 90, then turn redder - with the loved deep red clamped from
+ * 96F up, so 97F and 105F look exactly as before. */
 const THERMAL = [
   [50, "#0B5FD0"],
-  [68, "#0A84FF"],
-  [76, "#32ADE6"],
-  [82, "#FFB800"],
-  [90, "#FF6B00"],
+  [66, "#0A84FF"],
+  [77, "#32ADE6"],
+  [80, "#FFB800"],
+  [85, "#FF8A00"],
+  [90, "#FF5A00"],
   [96, "#D93E00"],
 ];
 
