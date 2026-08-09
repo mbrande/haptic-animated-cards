@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.0.2";
+const VERSION = "2.0.3";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -320,7 +320,7 @@ class HapticThermostatCard extends HTMLElement {
         .back {
           position: fixed; inset: 0; z-index: 99999;
           display: flex; align-items: center; justify-content: center;
-          opacity: 0; transition: opacity .28s ease; will-change: opacity;
+          opacity: 0; transition: opacity .56s ease; will-change: opacity;
           font-family: var(--ha-font-family-body, system-ui, -apple-system, sans-serif);
         }
         .back.in { opacity: 1; }
@@ -328,7 +328,9 @@ class HapticThermostatCard extends HTMLElement {
           position: absolute; inset: 0; pointer-events: none;
           background: rgba(0,0,0,.55);
           backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+          opacity: 0; transition: opacity .56s ease;
         }
+        .back.in .blur { opacity: 1; }
         /* Straight cross-fade, no scale/pop - backdrop and panel share the same
          * duration and easing so open and close read as one movement. */
         .panel {
@@ -339,7 +341,7 @@ class HapticThermostatCard extends HTMLElement {
           padding: 20px 18px 18px;
           box-shadow: 0 24px 70px rgba(0,0,0,.6);
           opacity: 0;
-          transition: opacity .28s ease; will-change: opacity;
+          transition: opacity .56s ease; will-change: opacity;
           display: flex; flex-direction: column; align-items: center;
         }
         .back.in .panel { opacity: 1; }
@@ -429,8 +431,11 @@ class HapticThermostatCard extends HTMLElement {
 
     q(".x").addEventListener("click", () => this.closePanel());
     // Backdrop only - a click inside the panel must not close it.
+    // The null guard matters: a click on the ✕ closes the panel and THEN bubbles
+    // to this handler, by which point _pEls is already null. Without the guard
+    // that threw a TypeError mid-close.
     this._pEls.back.addEventListener("click", (e) => {
-      if (e.target === this._pEls.back) this.closePanel();
+      if (this._pEls && e.target === this._pEls.back) this.closePanel();
     });
     this._pEls.sel.addEventListener("change", (e) => this._setMode(e.target.value));
 
@@ -467,7 +472,7 @@ class HapticThermostatCard extends HTMLElement {
     document.body.style.overflow = this._prevOverflow || "";
     // Remove only after the fade-out has finished, or it vanishes instantly.
     if (back) back.classList.remove("in");
-    setTimeout(() => host.remove(), 320);
+    setTimeout(() => host.remove(), 620);   // must outlast the .56s fade
   }
 
   /* ---------- interaction ---------- */
