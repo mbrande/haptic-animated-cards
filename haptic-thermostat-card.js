@@ -1,5 +1,5 @@
 /*
- * ios-thermostat-card
+ * haptic-thermostat-card
  * A circular temperature dial for Home Assistant, styled after the iOS Home app,
  * with haptic feedback while dragging.
  *
@@ -92,7 +92,7 @@ const MODE_LABEL = {
   fan_only: "Fan",
 };
 
-class IosThermostatCard extends HTMLElement {
+class HapticThermostatCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -108,10 +108,10 @@ class IosThermostatCard extends HTMLElement {
 
   setConfig(config) {
     if (!config || !config.entity) {
-      throw new Error("ios-thermostat-card: 'entity' is required");
+      throw new Error("haptic-thermostat-card: 'entity' is required");
     }
     if (config.entity.split(".")[0] !== "climate") {
-      throw new Error("ios-thermostat-card: entity must be a climate.* entity");
+      throw new Error("haptic-thermostat-card: entity must be a climate.* entity");
     }
     this._config = Object.assign(
       { name: null, min: null, max: null, step: null, modes: true },
@@ -603,19 +603,19 @@ class IosThermostatCard extends HTMLElement {
   }
 }
 
-customElements.define("ios-thermostat-card", IosThermostatCard);
+customElements.define("haptic-thermostat-card", HapticThermostatCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "ios-thermostat-card",
-  name: "iOS Thermostat Card",
+  type: "haptic-thermostat-card",
+  name: "Haptic Thermostat Card",
   description:
     "Circular temperature dial styled after the iOS Home app, with haptic feedback on the companion app.",
   preview: true,
 });
 
 console.info(
-  `%c IOS-THERMOSTAT-CARD %c v${VERSION} `,
+  `%c HAPTIC-THERMOSTAT-CARD %c v${VERSION} `,
   "color:#fff;background:#0A84FF;font-weight:700;border-radius:3px 0 0 3px;padding:2px 4px",
   "color:#0A84FF;background:#1c1c1e;border-radius:0 3px 3px 0;padding:2px 4px"
 );

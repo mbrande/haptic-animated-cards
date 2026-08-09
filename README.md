@@ -1,4 +1,4 @@
-# ios-thermostat-card
+# haptic-thermostat-card
 
 A circular temperature dial for Home Assistant, styled after the iOS Home app,
 **with haptic feedback while dragging**.
@@ -41,7 +41,7 @@ or on the Fire tablet kiosk the card renders and works normally, silently.
 ## Config
 
 ```yaml
-type: custom:ios-thermostat-card
+type: custom:haptic-thermostat-card
 entity: climate.home_downstairs_zone_1
 name: House          # optional, defaults to friendly_name
 min: 45              # optional, defaults to the entity's min_temp
@@ -55,7 +55,7 @@ step: 1              # optional, defaults to target_temp_step
 resource URL must change or you will be testing stale JavaScript and conclude
 your edit did nothing.
 
-1. edit `ios-thermostat-card.js`
+1. edit `haptic-thermostat-card.js`
 2. `git commit`
 3. bump `?v=` on the Lovelace resource (Settings → Dashboards → ⋮ → Resources)
 4. hard-refresh, or force-close and reopen the companion app
