@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.3.0";
+const VERSION = "2.3.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -246,9 +246,22 @@ class HapticThermostatCard extends HTMLElement {
           mix-blend-mode: multiply; opacity: .55;
           animation: float3 calc(var(--drift-speed, 8s) * 2.2) ease-in-out infinite alternate;
         }
+        /* A light catch, not a stripe: the old gradient spiked to its peak
+         * across 5% of the band, which drew a visible edge. Bell-curve stops
+         * over the full width, a lower peak, a slight blur to melt what is
+         * left of the edges, and the angle matched to the base gradient's
+         * 150deg so it reads as the same light source. */
         .sheen {
-          position: absolute; top: -20%; bottom: -20%; width: 45%;
-          background: linear-gradient(100deg, transparent, rgba(255,255,255,.16) 45%, rgba(255,255,255,.28) 50%, rgba(255,255,255,.16) 55%, transparent);
+          position: absolute; top: -25%; bottom: -25%; width: 70%;
+          background: linear-gradient(115deg,
+            transparent 0%,
+            rgba(255,255,255,.04) 28%,
+            rgba(255,255,255,.10) 44%,
+            rgba(255,255,255,.15) 50%,
+            rgba(255,255,255,.10) 56%,
+            rgba(255,255,255,.04) 72%,
+            transparent 100%);
+          filter: blur(8px);
           transform: translateX(-220%) skewX(-18deg);
           mix-blend-mode: screen;
           animation: sheen calc(var(--drift-speed, 8s) * 2.5) linear infinite;
@@ -270,8 +283,8 @@ class HapticThermostatCard extends HTMLElement {
         }
         /* Off-screen most of the cycle, one clean pass across. */
         @keyframes sheen {
-          0%, 64% { transform: translateX(-220%) skewX(-18deg); }
-          100%    { transform: translateX(320%) skewX(-18deg); }
+          0%, 55% { transform: translateX(-220%) skewX(-18deg); }
+          100%    { transform: translateX(260%) skewX(-18deg); }
         }
         /* Mode choreography. Cool drifts glacially (the defaults above); heat
          * runs the same paths noticeably faster, so it reads as embers rather
