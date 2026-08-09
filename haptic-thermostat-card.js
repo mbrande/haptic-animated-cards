@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.3.5";
+const VERSION = "2.3.6";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -520,7 +520,14 @@ class HapticThermostatCard extends HTMLElement {
         .target.range sup { font-size: 16px; }
         .target .lo { color: #FF9F0A; } .target .hi { color: #4C9BFF; }
         .target .dash { opacity: .45; margin: 0 6px; font-weight: 300; }
+        /* Positioned above the dial, explicitly. .wrap is position:relative,
+         * and positioned elements hit-test ABOVE static siblings regardless of
+         * DOM order - so the footer, pulled up into the dial's box by the
+         * negative margin, was visible through the SVG's transparent bottom gap
+         * but untappable: every tap on the mode pill landed on the SVG instead.
+         * That is why mode changes never registered. */
         .foot {
+          position: relative; z-index: 2;
           display: flex; align-items: center; justify-content: center;
           gap: 14px; flex-wrap: wrap; width: 100%;
         }
