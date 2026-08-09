@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.0.0";
+const VERSION = "2.0.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -313,10 +313,12 @@ class HapticThermostatCard extends HTMLElement {
           background: rgba(0,0,0,.55);
           backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           display: flex; align-items: center; justify-content: center;
-          opacity: 0; transition: opacity .22s ease;
+          opacity: 0; transition: opacity .28s ease;
           font-family: var(--ha-font-family-body, system-ui, -apple-system, sans-serif);
         }
         .back.in { opacity: 1; }
+        /* Straight cross-fade, no scale/pop - backdrop and panel share the same
+         * duration and easing so open and close read as one movement. */
         .panel {
           width: min(86vw, 78vh, 460px);
           background: var(--ha-card-background, var(--card-background-color, #1c1c1e));
@@ -324,11 +326,11 @@ class HapticThermostatCard extends HTMLElement {
           border-radius: 30px;
           padding: 20px 18px 18px;
           box-shadow: 0 24px 70px rgba(0,0,0,.6);
-          transform: scale(.9); opacity: 0;
-          transition: transform .24s cubic-bezier(.2,.8,.3,1), opacity .2s ease;
+          opacity: 0;
+          transition: opacity .28s ease;
           display: flex; flex-direction: column; align-items: center;
         }
-        .back.in .panel { transform: scale(1); opacity: 1; }
+        .back.in .panel { opacity: 1; }
         .hdr {
           width: 100%; display: flex; align-items: center;
           justify-content: space-between; margin-bottom: 2px;
@@ -443,8 +445,9 @@ class HapticThermostatCard extends HTMLElement {
     this._pending = null;
     document.removeEventListener("keydown", this._onKey);
     document.body.style.overflow = this._prevOverflow || "";
+    // Remove only after the fade-out has finished, or it vanishes instantly.
     if (back) back.classList.remove("in");
-    setTimeout(() => host.remove(), 240);
+    setTimeout(() => host.remove(), 320);
   }
 
   /* ---------- interaction ---------- */
