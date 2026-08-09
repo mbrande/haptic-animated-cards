@@ -22,7 +22,7 @@
  * No build step, no dependencies, plain custom element + Shadow DOM.
  */
 
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent - the detail
  * is assigned as a property after construction, matching the frontend. */
@@ -202,7 +202,7 @@ class IosThermostatCard extends HTMLElement {
       <style>
         :host { display: block; }
         ha-card {
-          padding: 14px 8px 14px;
+          padding: 14px 8px 12px;
           display: flex; flex-direction: column; align-items: center;
         }
         .name {
@@ -212,8 +212,12 @@ class IosThermostatCard extends HTMLElement {
         }
         /* The dial's 90 degree gap leaves dead space at the bottom of a square
          * SVG. Pull the following content up into it instead of letting the card
-         * grow taller than it needs to be. */
-        .wrap { position: relative; width: 100%; max-width: 320px; margin-bottom: -9%; }
+         * grow taller than it needs to be.
+         *
+         * How far is safe: with R=76 and STROKE=22 the arc's lowest point sits at
+         * y = 100 + 76*sin(135) + 11 = 165 of a 200-tall viewBox, so ~17% of the
+         * SVG below that is empty. -15% stays just inside it. */
+        .wrap { position: relative; width: 100%; max-width: 320px; margin-bottom: -15%; }
         svg { width: 100%; height: auto; display: block; touch-action: none; }
         .track { stroke: var(--divider-color, #3a3a3c); opacity: .4; }
         .knob  { transition: fill .35s ease; }
@@ -233,11 +237,18 @@ class IosThermostatCard extends HTMLElement {
           color: var(--primary-text-color);
         }
         .target sup { font-size: 21px; font-weight: 400; vertical-align: super; }
+        /* Reading and mode selector share one row - stacked they cost two rows of
+         * card height for two short items, which pushed the card past its grid
+         * allocation and let the next section heading overlap it. */
+        .footer {
+          display: flex; align-items: center; justify-content: center;
+          gap: 12px; flex-wrap: wrap; width: 100%;
+        }
         /* Sits BELOW the gauge, not inside it. */
         .current {
           font-size: 14px; font-weight: 500;
           color: var(--secondary-text-color);
-          text-align: center; min-height: 1.2em;
+          text-align: center;
         }
         /* A native <select> on purpose: iOS renders it as the system wheel
          * picker, which is exactly the interaction being asked for, and it is
@@ -247,7 +258,7 @@ class IosThermostatCard extends HTMLElement {
           font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .3px;
           -webkit-appearance: none; appearance: none;
           border: 0; border-radius: 16px; cursor: pointer;
-          padding: 7px 30px 7px 16px; margin-top: 12px;
+          padding: 7px 30px 7px 16px;
           color: #fff; text-align: center;
           transition: background .25s ease;
           background-repeat: no-repeat;
@@ -287,8 +298,10 @@ class IosThermostatCard extends HTMLElement {
             <div class="target"></div>
           </div>
         </div>
-        <div class="current"></div>
-        <select class="modesel" aria-label="HVAC mode"></select>
+        <div class="footer">
+          <div class="current"></div>
+          <select class="modesel" aria-label="HVAC mode"></select>
+        </div>
       </ha-card>
     `;
 
