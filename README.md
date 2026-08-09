@@ -3,6 +3,11 @@
 A circular temperature dial for Home Assistant, styled after the iOS Home app —
 **with haptic feedback while you drag it.**
 
+<p align="center">
+  <img src="docs/screenshot.jpg" width="300"
+       alt="Circular thermostat dial reading 74 degrees Fahrenheit with a blue gradient arc, an Idle status, the current temperature below, and a Cool mode selector pill">
+</p>
+
 You feel a tick for every degree you cross, and a firmer tap when the new
 temperature is committed. As far as I can tell it is the only Home Assistant
 temperature control that does.
