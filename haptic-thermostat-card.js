@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.3.3";
+const VERSION = "2.3.4";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -124,7 +124,7 @@ class HapticThermostatCard extends HTMLElement {
     }
     this._config = Object.assign(
       { name: null, min: null, max: null, step: null, modes: true,
-        animation: true, animation_speed: 8 },
+        animation: true, animation_speed: 10 },
       config
     );
     this._built = false;
@@ -239,12 +239,12 @@ class HapticThermostatCard extends HTMLElement {
           mix-blend-mode: screen; opacity: .8;
           will-change: transform;
         }
-        .b1 { top: -55%; left: -45%; animation: float1 calc(var(--drift-speed, 8s) * 1.15 * var(--r, 1)) ease-in-out infinite alternate; }
-        .b2 { bottom: -60%; right: -45%; animation: float2 calc(var(--drift-speed, 8s) * 1.6 * var(--r, 1)) ease-in-out infinite alternate; }
+        .b1 { top: -55%; left: -45%; animation: float1 calc(var(--drift-speed, 10s) * 1.15 * var(--r, 1)) ease-in-out infinite alternate; }
+        .b2 { bottom: -60%; right: -45%; animation: float2 calc(var(--drift-speed, 10s) * 1.6 * var(--r, 1)) ease-in-out infinite alternate; }
         .b3 {
           top: -20%; left: -15%; width: 170%;
           mix-blend-mode: multiply; opacity: .55;
-          animation: float3 calc(var(--drift-speed, 8s) * 2.2 * var(--r, 1)) ease-in-out infinite alternate;
+          animation: float3 calc(var(--drift-speed, 10s) * 2.2 * var(--r, 1)) ease-in-out infinite alternate;
         }
         /* A light catch, not a stripe: the old gradient spiked to its peak
          * across 5% of the band, which drew a visible edge. Bell-curve stops
@@ -273,7 +273,7 @@ class HapticThermostatCard extends HTMLElement {
           filter: blur(10px);
           transform: translateX(-220%) skewX(-18deg);
           mix-blend-mode: screen;
-          animation: sheen calc(var(--drift-speed, 8s) * 2.5 * var(--r, 1)) linear infinite;
+          animation: sheen calc(var(--drift-speed, 10s) * 2.5 * var(--r, 1)) linear infinite;
           will-change: transform;
         }
         @keyframes float1 {
@@ -298,10 +298,10 @@ class HapticThermostatCard extends HTMLElement {
         /* Mode choreography. Cool drifts glacially (the defaults above); heat
          * runs the same paths noticeably faster, so it reads as embers rather
          * than ice. */
-        .m-heat .b1 { animation-duration: calc(var(--drift-speed, 8s) * .65 * var(--r, 1)); }
-        .m-heat .b2 { animation-duration: calc(var(--drift-speed, 8s) * .9 * var(--r, 1)); }
-        .m-heat .b3 { animation-duration: calc(var(--drift-speed, 8s) * 1.3 * var(--r, 1)); }
-        .m-heat .sheen { animation-duration: calc(var(--drift-speed, 8s) * 1.8 * var(--r, 1)); }
+        .m-heat .b1 { animation-duration: calc(var(--drift-speed, 10s) * .65 * var(--r, 1)); }
+        .m-heat .b2 { animation-duration: calc(var(--drift-speed, 10s) * .9 * var(--r, 1)); }
+        .m-heat .b3 { animation-duration: calc(var(--drift-speed, 10s) * 1.3 * var(--r, 1)); }
+        .m-heat .sheen { animation-duration: calc(var(--drift-speed, 10s) * 1.8 * var(--r, 1)); }
         /* Orb palettes per mode. */
         .m-cool  .b1 { --c: #9BE8FF; } .m-cool  .b2 { --c: #2E6BFF; } .m-cool  .b3 { --c: #032A66; }
         .m-heat  .b1 { --c: #FFD27A; } .m-heat  .b2 { --c: #FF5A00; } .m-heat  .b3 { --c: #7A1600; }
@@ -393,7 +393,7 @@ class HapticThermostatCard extends HTMLElement {
     const spd = Number(this._config.animation_speed);
     const on = this._config.animation !== false && !(spd === 0);
     c.classList.toggle("no-anim", !on);
-    if (on) c.style.setProperty("--drift-speed", `${spd > 0 ? spd : 8}s`);
+    if (on) c.style.setProperty("--drift-speed", `${spd > 0 ? spd : 10}s`);
   }
 
   _setModeClass(key) {

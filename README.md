@@ -101,7 +101,7 @@ type: custom:haptic-thermostat-card
 entity: climate.your_thermostat
 name: House            # optional, defaults to the entity's friendly name
 animation: true        # optional, set false to stop the gradient drifting
-animation_speed: 8     # optional, seconds per cycle. Lower = faster. 0 = off
+animation_speed: 10    # optional, seconds per cycle. Lower = faster. 0 = off
 modes: true            # optional, set false to hide the HVAC mode selector
 min: 45                # optional, defaults to the entity's min_temp
 max: 95                # optional, defaults to the entity's max_temp
