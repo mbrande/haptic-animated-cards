@@ -1,0 +1,36 @@
+name: Prune draft releases
+
+# Deleting a tag demotes its release to an invisible draft, and the release
+# workflow can then upload into the draft instead of publishing (this stranded
+# v2.3.2 and v3.1.6). Drafts are never intentional in this repo - every real
+# release is published by the Release workflow - so any draft is debris.
+# Runs on every push; the final step fails the run if any draft survives, so a
+# green run is positive proof the repo is clean.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all draft releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/releases" --paginate \
+            --jq '.[] | select(.draft==true) | [.id, .tag_name // "-", .name // "-"] | @tsv' \
+          | while IFS=$'\t' read -r id tag name; do
+              echo "deleting draft release id=$id tag=$tag name=$name"
+              gh api -X DELETE "repos/$REPO/releases/$id"
+            done
+          left=$(gh api "repos/$REPO/releases" --paginate \
+            --jq '[.[] | select(.draft==true)] | length')
+          echo "drafts remaining: $left"
+          test "$left" = "0"
