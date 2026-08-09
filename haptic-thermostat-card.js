@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "2.3.6";
+const VERSION = "2.4.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -64,6 +64,13 @@ function arcPath(cx, cy, r, a0, a1) {
 }
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+/* #RRGGBB -> rgba(r,g,b,a). The glass tile keeps the same shade families but
+ * lets the dashboard show through them. */
+const hexRgba = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+};
 
 /* Ring ramps. The pale highlight band about two thirds along is what gives the
  * iOS ring its sheen; a plain two-stop gradient looks flat beside it. */
@@ -124,7 +131,7 @@ class HapticThermostatCard extends HTMLElement {
     }
     this._config = Object.assign(
       { name: null, min: null, max: null, step: null, modes: true,
-        animation: true, animation_speed: 10 },
+        animation: true, animation_speed: 10, glass: true },
       config
     );
     this._built = false;
@@ -220,6 +227,7 @@ class HapticThermostatCard extends HTMLElement {
           position: relative; overflow: hidden;
           height: 100%; box-sizing: border-box;
           border: none; padding: 0;
+          background: transparent;
           cursor: pointer;
           transition: transform .18s ease, filter .18s ease;
           color: #fff;
@@ -231,7 +239,22 @@ class HapticThermostatCard extends HTMLElement {
          * the gradient instead: three radial glow orbs drifting lava-lamp
          * style (transform-only, so GPU composited) and a periodic sheen
          * sweep. Orb colours and tempo differ per mode. */
-        .bg { position: absolute; inset: 0; }
+        /* isolation: the orbs use mix-blend-mode, and on a translucent tile
+         * they would otherwise blend with whatever the dashboard has behind the
+         * card. Isolating .bg makes them blend only against the tinted glass. */
+        .bg { position: absolute; inset: 0; isolation: isolate; }
+        .bg.glass {
+          backdrop-filter: blur(20px) saturate(1.7);
+          -webkit-backdrop-filter: blur(20px) saturate(1.7);
+        }
+        /* The glass rim: a hairline border and a soft top-edge light catch,
+         * above the orbs, below the content. */
+        .bg.glass::after {
+          content: ""; position: absolute; inset: 0; pointer-events: none;
+          border: 1px solid rgba(255,255,255,.22);
+          background: linear-gradient(175deg, rgba(255,255,255,.20), rgba(255,255,255,0) 30%);
+          z-index: 1;
+        }
         .blob {
           position: absolute; width: 130%; aspect-ratio: 1;
           border-radius: 50%;
@@ -411,7 +434,11 @@ class HapticThermostatCard extends HTMLElement {
       this._config.name ?? (s ? s.attributes.friendly_name : this._config.entity);
 
     if (!s || s.state === "unavailable" || s.state === "unknown") {
-      this._tEls.bg.style.backgroundImage = "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
+      const gOff = this._config.glass !== false;
+      this._tEls.bg.classList.toggle("glass", gOff);
+      this._tEls.bg.style.backgroundImage = gOff
+        ? "linear-gradient(150deg," + hexRgba("#A0A0A6", .7) + " 0%," + hexRgba("#7C7C82", .55) + " 50%," + hexRgba("#4A4A50", .7) + " 100%)"
+        : "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 50%,#4A4A50 100%)";
       this._setModeClass("idle");
       this._applyAnimation();
       this._tEls.big.innerHTML = `<span class="unavail">${s ? s.state : "not found"}</span>`;
@@ -420,8 +447,15 @@ class HapticThermostatCard extends HTMLElement {
     }
 
     const [c0, c1, c2] = this._tileShade;
+    const glass = this._config.glass !== false;
+    this._tEls.bg.classList.toggle("glass", glass);
+    // Middle stop most transparent: the tint holds its colour at the edges and
+    // lets the dashboard show through the centre - that is the liquid look.
+    const s0 = glass ? hexRgba(c0, .72) : c0;
+    const s1 = glass ? hexRgba(c1, .52) : c1;
+    const s2 = glass ? hexRgba(c2, .72) : c2;
     this._tEls.bg.style.backgroundImage =
-      `linear-gradient(150deg, ${c0} 0%, ${c1} 45%, ${c2} 100%)`;
+      `linear-gradient(150deg, ${s0} 0%, ${s1} 45%, ${s2} 100%)`;
     this._setModeClass(this._rampKey);
     this._applyAnimation();
 
