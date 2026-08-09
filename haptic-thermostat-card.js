@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.0.0";
+const VERSION = "3.0.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -157,7 +157,7 @@ class HapticThermostatCard extends HTMLElement {
     }
     this._config = Object.assign(
       { name: null, min: null, max: null, step: null, modes: true,
-        animation: true, animation_speed: 10, glass: true, liquid: true },
+        animation: true, animation_speed: 10, glass: true, liquid: false },
       config
     );
     this._built = false;
