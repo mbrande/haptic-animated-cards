@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.1.2";
+const VERSION = "3.1.3";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1213,17 +1213,17 @@ class HapticTempPill extends HTMLElement {
             rgba(255,255,255,.10) 100%);
         }
         .blob {
-          position: absolute; width: 150%; aspect-ratio: 1;
+          position: absolute; width: 170%; aspect-ratio: 1;
           border-radius: 50%;
-          background: radial-gradient(circle, var(--c) 0%, transparent 62%);
-          mix-blend-mode: screen; opacity: .7;
+          background: radial-gradient(circle, var(--c) 0%, transparent 68%);
+          mix-blend-mode: screen; opacity: .95;
           will-change: transform;
         }
-        .p1 { top: -130%; left: -35%; animation: pfloat1 calc(var(--drift-speed, 10s) * 1.3 * var(--r, 1)) ease-in-out infinite alternate; }
+        .p1 { top: -140%; left: -40%; animation: pfloat1 calc(var(--drift-speed, 10s) * 1.0 * var(--r, 1)) ease-in-out infinite alternate; }
         .p2 {
-          bottom: -140%; right: -30%;
-          mix-blend-mode: multiply; opacity: .5;
-          animation: pfloat2 calc(var(--drift-speed, 10s) * 1.9 * var(--r, 1)) ease-in-out infinite alternate;
+          bottom: -150%; right: -35%;
+          mix-blend-mode: multiply; opacity: .6;
+          animation: pfloat2 calc(var(--drift-speed, 10s) * 1.5 * var(--r, 1)) ease-in-out infinite alternate;
         }
         @keyframes pfloat1 {
           0%   { transform: translate3d(0, 0, 0) scale(1); }
@@ -1234,18 +1234,18 @@ class HapticTempPill extends HTMLElement {
           100% { transform: translate3d(-22%, -12%, 0) scale(.95); }
         }
         .sheen {
-          position: absolute; top: -30%; bottom: -30%; width: 70%;
+          position: absolute; top: -30%; bottom: -30%; width: 85%;
           background: linear-gradient(115deg,
             transparent 0%,
-            rgba(255,255,255,.03) 20%,
-            rgba(255,255,255,.06) 45%,
-            rgba(255,255,255,.14) 80%,
-            rgba(255,255,255,.05) 92%,
+            rgba(255,255,255,.05) 20%,
+            rgba(255,255,255,.10) 45%,
+            rgba(255,255,255,.24) 80%,
+            rgba(255,255,255,.08) 92%,
             transparent 100%);
           filter: blur(8px);
           transform: translateX(-260%) skewX(-18deg);
           mix-blend-mode: screen;
-          animation: psheen calc(var(--drift-speed, 10s) * 3.2 * var(--r, 1)) linear infinite;
+          animation: psheen calc(var(--drift-speed, 10s) * 2.4 * var(--r, 1)) linear infinite;
           will-change: transform;
         }
         @keyframes psheen {
@@ -1266,8 +1266,12 @@ class HapticTempPill extends HTMLElement {
           width: 34px; height: 34px; border-radius: 50%; flex: none;
           background: rgba(255,255,255,.22);
           display: grid; place-items: center;
+          transition: background .45s ease;
         }
-        .ic svg { width: 19px; height: 19px; fill: #fff; }
+        .ic svg {
+          width: 19px; height: 19px; fill: #fff;
+          transition: fill .45s ease, filter .45s ease;
+        }
         .tx { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
         .nm {
           font-size: 15px; font-weight: 600; letter-spacing: .2px;
@@ -1302,6 +1306,8 @@ class HapticTempPill extends HTMLElement {
       bg: this.shadowRoot.querySelector(".bg"),
       nm: this.shadowRoot.querySelector(".nm"),
       vl: this.shadowRoot.querySelector(".vl"),
+      ic: this.shadowRoot.querySelector(".ic"),
+      icSvg: this.shadowRoot.querySelector(".ic svg"),
     };
     // Same de-looping as the tile: random tempo, mid-phase start, direction.
     const rnd = (a, b) => a + Math.random() * (b - a);
@@ -1340,6 +1346,9 @@ class HapticTempPill extends HTMLElement {
         ? "linear-gradient(150deg," + hexRgba("#A0A0A6", .58) + " 0%," + hexRgba("#7C7C82", .40) + " 45%," + hexRgba("#4A4A50", .58) + " 100%)"
         : "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 45%,#4A4A50 100%)";
       this._els.vl.textContent = s ? s.state : "not found";
+      this._els.ic.style.background = "";
+      this._els.icSvg.style.fill = "";
+      this._els.icSvg.style.filter = "";
       return;
     }
 
@@ -1357,6 +1366,12 @@ class HapticTempPill extends HTMLElement {
     const p2 = this.shadowRoot.querySelector(".p2");
     p1.style.setProperty("--c", mixHex(base, "#FFFFFF", 0.55));
     p2.style.setProperty("--c", mixHex(base, "#000000", 0.45));
+
+    // The icon wears the temperature too: a deep-shade glyph on a tinted frost
+    // circle, with a soft glow in the thermal colour.
+    this._els.ic.style.background = hexRgba(mixHex(base, "#FFFFFF", 0.30), 0.34);
+    this._els.icSvg.style.fill = mixHex(base, "#000000", 0.38);
+    this._els.icSvg.style.filter = "drop-shadow(0 0 5px " + hexRgba(base, 0.9) + ")";
 
     this._els.vl.textContent = raw.toFixed(1) + (unit ? " " + unit : "");
   }
