@@ -141,6 +141,23 @@ modes: true       # optional, set false to hide the HVAC mode selector
 * Ring colour follows `hvac_action` where available, so it is orange only while
   actually heating.
 
+## Bonus card: haptic-temp-pill
+
+The same glass material as a compact sensor pill, coloured by the temperature
+itself - deep blue at 50F through cyan, amber and orange to deep red at 90F+,
+interpolated smoothly between anchors. Celsius sensors are converted for the
+colour mapping only; the displayed value keeps the sensor's own unit. Tapping
+opens the entity's more-info dialog, with a haptic tap.
+
+```yaml
+type: custom:haptic-temp-pill
+entity: sensor.outside_temperature
+name: Outside          # optional
+animation: true        # optional, same semantics as the thermostat card
+animation_speed: 10    # optional
+glass: true            # optional
+```
+
 ## Design notes
 
 * Vanilla custom element and Shadow DOM. No Lit, no build step, no dependencies —

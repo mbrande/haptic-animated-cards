@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.0.1";
+const VERSION = "3.1.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1097,7 +1097,274 @@ class HapticThermostatCard extends HTMLElement {
 
 customElements.define("haptic-thermostat-card", HapticThermostatCard);
 
+/* ------------------------------------------------------------------ */
+/* haptic-temp-pill: a compact glass pill for temperature sensors.
+ * Same material and choreography family as the thermostat tile, but the
+ * colour comes from the TEMPERATURE itself on a thermal scale, not from
+ * HVAC mode. Tapping opens the entity's more-info dialog, with a haptic. */
+
+/* Thermal anchors, in Fahrenheit; values between anchors interpolate in RGB
+ * and values beyond the ends clamp. Sensors reporting Celsius are converted
+ * for the mapping only - the displayed value keeps its own unit. */
+const THERMAL = [
+  [50, "#0B5FD0"],
+  [62, "#0A84FF"],
+  [70, "#32ADE6"],
+  [75, "#FFB800"],
+  [82, "#FF6B00"],
+  [90, "#D93E00"],
+];
+
+const mixHex = (h1, h2, t) => {
+  const a = parseInt(h1.slice(1), 16), b = parseInt(h2.slice(1), 16);
+  const ch = (sh) => Math.round(((a >> sh) & 255) + (((b >> sh) & 255) - ((a >> sh) & 255)) * t);
+  return "#" + ((1 << 24) + (ch(16) << 16) + (ch(8) << 8) + ch(0)).toString(16).slice(1);
+};
+
+const thermalColor = (f) => {
+  if (f <= THERMAL[0][0]) return THERMAL[0][1];
+  for (let i = 1; i < THERMAL.length; i++) {
+    if (f <= THERMAL[i][0]) {
+      const [t0, c0] = THERMAL[i - 1];
+      const [t1, c1] = THERMAL[i];
+      return mixHex(c0, c1, (f - t0) / (t1 - t0));
+    }
+  }
+  return THERMAL[THERMAL.length - 1][1];
+};
+
+class HapticTempPill extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._built = false;
+  }
+
+  setConfig(config) {
+    if (!config || !config.entity) {
+      throw new Error("haptic-temp-pill: 'entity' is required");
+    }
+    this._config = Object.assign(
+      { name: null, animation: true, animation_speed: 10, glass: true },
+      config
+    );
+    this._built = false;
+  }
+
+  getCardSize() { return 1; }
+  static getStubConfig() { return { entity: "" }; }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._built) this._build();
+    this._render();
+  }
+
+  get _s() {
+    return this._hass && this._config ? this._hass.states[this._config.entity] : undefined;
+  }
+
+  _build() {
+    this._built = true;
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display: block; height: 100%; }
+        ha-card {
+          position: relative; overflow: hidden;
+          height: 100%; box-sizing: border-box;
+          border: none; padding: 0;
+          background: transparent;
+          cursor: pointer;
+          transition: transform .18s ease, filter .18s ease;
+          color: #fff;
+        }
+        ha-card:active { transform: scale(.97); filter: brightness(1.08); }
+        .bg {
+          position: absolute; inset: 0; isolation: isolate;
+          border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
+        }
+        .bg.glass {
+          backdrop-filter: blur(26px) saturate(1.8) brightness(1.06);
+          -webkit-backdrop-filter: blur(26px) saturate(1.8) brightness(1.06);
+        }
+        .bg.glass::after {
+          content: ""; position: absolute; inset: 0; pointer-events: none;
+          z-index: 1;
+          border-radius: inherit;
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.30),
+            inset 0 0 7px 2px rgba(255,255,255,.13),
+            inset 0 1.5px 1px rgba(255,255,255,.28);
+        }
+        .bg.glass::before {
+          content: ""; position: absolute; inset: 0; pointer-events: none;
+          z-index: 1;
+          border-radius: inherit;
+          background: linear-gradient(180deg,
+            rgba(255,255,255,.20) 0%,
+            rgba(255,255,255,.05) 45%,
+            rgba(255,255,255,.10) 100%);
+        }
+        .blob {
+          position: absolute; width: 150%; aspect-ratio: 1;
+          border-radius: 50%;
+          background: radial-gradient(circle, var(--c) 0%, transparent 62%);
+          mix-blend-mode: screen; opacity: .7;
+          will-change: transform;
+        }
+        .p1 { top: -130%; left: -35%; animation: pfloat1 calc(var(--drift-speed, 10s) * 1.3 * var(--r, 1)) ease-in-out infinite alternate; }
+        .p2 {
+          bottom: -140%; right: -30%;
+          mix-blend-mode: multiply; opacity: .5;
+          animation: pfloat2 calc(var(--drift-speed, 10s) * 1.9 * var(--r, 1)) ease-in-out infinite alternate;
+        }
+        @keyframes pfloat1 {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          100% { transform: translate3d(26%, 14%, 0) scale(1.1); }
+        }
+        @keyframes pfloat2 {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          100% { transform: translate3d(-22%, -12%, 0) scale(.95); }
+        }
+        .sheen {
+          position: absolute; top: -30%; bottom: -30%; width: 70%;
+          background: linear-gradient(115deg,
+            transparent 0%,
+            rgba(255,255,255,.03) 20%,
+            rgba(255,255,255,.06) 45%,
+            rgba(255,255,255,.14) 80%,
+            rgba(255,255,255,.05) 92%,
+            transparent 100%);
+          filter: blur(8px);
+          transform: translateX(-260%) skewX(-18deg);
+          mix-blend-mode: screen;
+          animation: psheen calc(var(--drift-speed, 10s) * 3.2 * var(--r, 1)) linear infinite;
+          will-change: transform;
+        }
+        @keyframes psheen {
+          0%, 62% { transform: translateX(-260%) skewX(-18deg); }
+          100%    { transform: translateX(300%) skewX(-18deg); }
+        }
+        .bg.no-anim .blob, .bg.no-anim .sheen { animation: none; }
+        @media (prefers-reduced-motion: reduce) {
+          .blob, .sheen { animation: none; }
+        }
+        .content {
+          position: relative; z-index: 1;
+          height: 100%; box-sizing: border-box;
+          display: flex; align-items: center; gap: 14px;
+          padding: 12px 16px;
+        }
+        .ic {
+          width: 40px; height: 40px; border-radius: 50%; flex: none;
+          background: rgba(255,255,255,.22);
+          display: grid; place-items: center;
+        }
+        .ic svg { width: 22px; height: 22px; fill: #fff; }
+        .tx { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+        .nm {
+          font-size: 16px; font-weight: 600; letter-spacing: .2px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          text-shadow: 0 1px 2px rgba(0,0,0,.18);
+        }
+        .vl {
+          font-size: 14px; font-weight: 500; opacity: .95;
+          font-feature-settings: "tnum";
+          text-shadow: 0 1px 2px rgba(0,0,0,.18);
+        }
+      </style>
+      <ha-card>
+        <div class="bg">
+          <div class="blob p1"></div>
+          <div class="blob p2"></div>
+          <div class="sheen"></div>
+        </div>
+        <div class="content">
+          <div class="ic">
+            <svg viewBox="0 0 24 24"><path d="M15 13V5a3 3 0 0 0-6 0v8a5 5 0 1 0 6 0zm-3-9a1 1 0 0 1 1 1v8.6l.5.3a3 3 0 1 1-3 0l.5-.3V5a1 1 0 0 1 1-1z"/></svg>
+          </div>
+          <div class="tx">
+            <div class="nm"></div>
+            <div class="vl"></div>
+          </div>
+        </div>
+      </ha-card>
+    `;
+    this._els = {
+      card: this.shadowRoot.querySelector("ha-card"),
+      bg: this.shadowRoot.querySelector(".bg"),
+      nm: this.shadowRoot.querySelector(".nm"),
+      vl: this.shadowRoot.querySelector(".vl"),
+    };
+    // Same de-looping as the tile: random tempo, mid-phase start, direction.
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (const sel of [".p1", ".p2", ".sheen"]) {
+      const el = this.shadowRoot.querySelector(sel);
+      el.style.setProperty("--r", rnd(0.82, 1.28).toFixed(3));
+      el.style.animationDelay = "-" + rnd(0, 30).toFixed(2) + "s";
+      if (sel !== ".sheen" && Math.random() < 0.5) {
+        el.style.animationDirection = "alternate-reverse";
+      }
+    }
+    this._els.card.addEventListener("click", () => {
+      haptic("light");
+      fireEvent(this, "hass-more-info", { entityId: this._config.entity });
+    });
+  }
+
+  _render() {
+    if (!this._els) return;
+    const s = this._s;
+    const glass = this._config.glass !== false;
+    const bg = this._els.bg;
+    bg.classList.toggle("glass", glass);
+
+    const spd = Number(this._config.animation_speed);
+    const on = this._config.animation !== false && spd !== 0;
+    bg.classList.toggle("no-anim", !on);
+    if (on) bg.style.setProperty("--drift-speed", (spd > 0 ? spd : 10) + "s");
+
+    this._els.nm.textContent =
+      this._config.name ?? (s ? s.attributes.friendly_name : this._config.entity);
+
+    const raw = s ? parseFloat(s.state) : NaN;
+    if (!s || isNaN(raw)) {
+      bg.style.backgroundImage = glass
+        ? "linear-gradient(150deg," + hexRgba("#A0A0A6", .58) + " 0%," + hexRgba("#7C7C82", .40) + " 45%," + hexRgba("#4A4A50", .58) + " 100%)"
+        : "linear-gradient(150deg,#A0A0A6 0%,#7C7C82 45%,#4A4A50 100%)";
+      this._els.vl.textContent = s ? s.state : "not found";
+      return;
+    }
+
+    const unit = (s.attributes.unit_of_measurement || "").trim();
+    // Map on Fahrenheit; display in whatever the sensor reports.
+    const f = unit.indexOf("C") >= 0 ? raw * 9 / 5 + 32 : raw;
+    const base = thermalColor(f);
+    const c0 = mixHex(base, "#FFFFFF", 0.35);
+    const c2 = mixHex(base, "#000000", 0.30);
+    bg.style.backgroundImage = glass
+      ? "linear-gradient(150deg," + hexRgba(c0, .58) + " 0%," + hexRgba(base, .40) + " 45%," + hexRgba(c2, .58) + " 100%)"
+      : "linear-gradient(150deg," + c0 + " 0%," + base + " 45%," + c2 + " 100%)";
+
+    const p1 = this.shadowRoot.querySelector(".p1");
+    const p2 = this.shadowRoot.querySelector(".p2");
+    p1.style.setProperty("--c", mixHex(base, "#FFFFFF", 0.55));
+    p2.style.setProperty("--c", mixHex(base, "#000000", 0.45));
+
+    this._els.vl.textContent = raw.toFixed(1) + (unit ? " " + unit : "");
+  }
+}
+
+customElements.define("haptic-temp-pill", HapticTempPill);
+
 window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "haptic-temp-pill",
+  name: "Haptic Temperature Pill",
+  description:
+    "Glass temperature pill whose colour follows the reading - blue when cold, red when hot.",
+  preview: true,
+});
 window.customCards.push({
   type: "haptic-thermostat-card",
   name: "Haptic Thermostat Card",
