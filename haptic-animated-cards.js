@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.3.4";
+const VERSION = "3.3.5";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1646,7 +1646,7 @@ class HapticMediaCard extends HTMLElement {
         .applogo {
           position: absolute; right: 16px; top: 44px;
           width: 54px; height: 54px; border-radius: 12px;
-          background: rgba(255,255,255,.16);
+          background: rgba(255,255,255,.22);
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 4px 14px rgba(0,0,0,.3);
           display: grid; place-items: center;
           z-index: 3;
@@ -1729,6 +1729,10 @@ class HapticMediaCard extends HTMLElement {
     // Config wins over the app tint - "make it blue" is a valid preference.
     if (this._config.accent) return this._config.accent;
     const app = (s.attributes.app_name || "").toLowerCase();
+    // The glyph's brand color is the tint, so tile and card always match.
+    for (const k in APP_LOGOS) {
+      if (app.indexOf(k) >= 0) return APP_LOGOS[k].c;
+    }
     for (const k in APP_ACCENTS) {
       if (app.indexOf(k) >= 0) return APP_ACCENTS[k];
     }
