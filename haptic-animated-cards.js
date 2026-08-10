@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.2.2";
+const VERSION = "3.2.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1435,7 +1435,7 @@ class HapticMediaCard extends HTMLElement {
       throw new Error("haptic-media-card: entity must be a media_player.* entity");
     }
     this._config = Object.assign(
-      { name: null, animation: true, animation_speed: 10, glass: true },
+      { name: null, animation: true, animation_speed: 10, glass: true, accent: null },
       config
     );
     this._built = false;
@@ -1556,6 +1556,7 @@ class HapticMediaCard extends HTMLElement {
           background: rgba(255,255,255,.18);
           text-shadow: 0 1px 2px rgba(0,0,0,.2);
         }
+        .bg.hasart ~ .content .title, .bg.hasart ~ .content .artist { padding-right: 104px; }
         .title {
           font-size: 17px; font-weight: 700; line-height: 1.25;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -1598,6 +1599,12 @@ class HapticMediaCard extends HTMLElement {
         .row .pp svg { width: 30px; height: 30px; }
         .row .pw { margin-right: auto; }
         .row .sp { margin-left: auto; width: 42px; }
+        .thumb {
+          position: absolute; right: 16px; top: 44px;
+          width: 92px; border-radius: 8px;
+          box-shadow: 0 4px 14px rgba(0,0,0,.4);
+          z-index: 3;
+        }
         .idle-note { font-size: 14px; font-weight: 500; opacity: .8; }
         [hidden] { display: none !important; }
       </style>
@@ -1607,6 +1614,7 @@ class HapticMediaCard extends HTMLElement {
           <div class="blob m1"></div>
           <div class="blob m2"></div>
         </div>
+        <img class="thumb" hidden alt="">
         <div class="content">
           <div class="hdr">
             <svg viewBox="0 0 24 24"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
@@ -1639,7 +1647,7 @@ class HapticMediaCard extends HTMLElement {
       fill: q(".fill"), tl: q(".tl"), tr: q(".tr"),
       pp: q(".pp"), iplay: q(".i-play"), ipause: q(".i-pause"),
       prev: q(".prev"), next: q(".next"), pw: q(".pw"),
-      m1: q(".m1"), m2: q(".m2"),
+      m1: q(".m1"), m2: q(".m2"), thumb: this.shadowRoot.querySelector(".thumb"),
     };
     const rnd = (a, b) => a + Math.random() * (b - a);
     for (const el of [this._els.m1, this._els.m2]) {
@@ -1661,6 +1669,8 @@ class HapticMediaCard extends HTMLElement {
     if (!s || s.state === "off" || s.state === "unavailable" || s.state === "idle") {
       return "#6E6E73";
     }
+    // Config wins over the app tint - "make it blue" is a valid preference.
+    if (this._config.accent) return this._config.accent;
     const app = (s.attributes.app_name || "").toLowerCase();
     for (const k in APP_ACCENTS) {
       if (app.indexOf(k) >= 0) return APP_ACCENTS[k];
@@ -1724,9 +1734,19 @@ class HapticMediaCard extends HTMLElement {
     this._els.m1.style.setProperty("--c", mixHex(accent, "#FFFFFF", 0.55));
     this._els.m2.style.setProperty("--c", mixHex(accent, "#000000", 0.45));
 
-    const art = s && s.attributes.entity_picture;
+    let art = s && s.attributes.entity_picture;
+    if (!art && s && /youtube/i.test(s.attributes.app_name || "")) {
+      // TV-native YouTube sessions often put the video id in media_content_id;
+      // phone-cast sessions expose nothing, and then there is no thumbnail to
+      // be had from any source.
+      const cid = String(s.attributes.media_content_id || "");
+      const m = cid.match(/(?:^|v=|\/)([A-Za-z0-9_-]{11})(?:$|[&?])/);
+      if (m) art = "https://img.youtube.com/vi/" + m[1] + "/mqdefault.jpg";
+    }
     bg.classList.toggle("hasart", !!art);
     this._els.art.style.backgroundImage = art ? "url('" + art + "')" : "";
+    this._els.thumb.hidden = !art;
+    if (art) this._els.thumb.src = art;
 
     if (!s || s.state === "unavailable" || s.state === "off" || s.state === "idle") {
       this._els.app.textContent = s ? s.state : "not found";
