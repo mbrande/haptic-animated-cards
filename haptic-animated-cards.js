@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.3.1";
+const VERSION = "3.3.2";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1519,12 +1519,38 @@ class HapticMediaCard extends HTMLElement {
           mix-blend-mode: screen; opacity: .85;
           will-change: transform;
         }
-        .m1 { top: -120%; left: -30%; animation: mfloat1 calc(var(--drift-speed, 10s) * 1.2 * var(--r, 1)) ease-in-out infinite alternate; }
+        .m1 { top: -120%; left: -30%; animation: mfloat1 calc(var(--drift-speed, 10s) * .85 * var(--r, 1)) ease-in-out infinite alternate; }
         .m2 {
           bottom: -130%; right: -25%;
           mix-blend-mode: multiply; opacity: .55;
-          animation: mfloat2 calc(var(--drift-speed, 10s) * 1.8 * var(--r, 1)) ease-in-out infinite alternate;
+          animation: mfloat2 calc(var(--drift-speed, 10s) * 1.3 * var(--r, 1)) ease-in-out infinite alternate;
         }
+        .m3 {
+          top: -60%; right: 10%; width: 90%;
+          opacity: .7;
+          animation: mfloat1 calc(var(--drift-speed, 10s) * 1.05 * var(--r, 1)) ease-in-out infinite alternate-reverse;
+        }
+        .msheen {
+          position: absolute; top: -30%; bottom: -30%; width: 85%;
+          background: linear-gradient(115deg,
+            transparent 0%,
+            rgba(255,255,255,.05) 20%,
+            rgba(255,255,255,.10) 45%,
+            rgba(255,255,255,.22) 80%,
+            rgba(255,255,255,.08) 92%,
+            transparent 100%);
+          filter: blur(9px);
+          transform: translateX(-260%) skewX(-18deg);
+          mix-blend-mode: screen;
+          animation: msheenk calc(var(--drift-speed, 10s) * 2.2 * var(--r, 1)) linear infinite;
+          will-change: transform;
+        }
+        @keyframes msheenk {
+          0%, 58% { transform: translateX(-260%) skewX(-18deg); }
+          100%    { transform: translateX(300%) skewX(-18deg); }
+        }
+        .bg.no-anim .msheen { animation: none; }
+        @media (prefers-reduced-motion: reduce) { .msheen { animation: none; } }
         @keyframes mfloat1 {
           0%   { transform: translate3d(0, 0, 0) scale(1); }
           100% { transform: translate3d(24%, 16%, 0) scale(1.1); }
@@ -1613,6 +1639,8 @@ class HapticMediaCard extends HTMLElement {
           <div class="art"></div>
           <div class="blob m1"></div>
           <div class="blob m2"></div>
+          <div class="blob m3"></div>
+          <div class="msheen"></div>
         </div>
         <img class="thumb" hidden alt="">
         <div class="content">
@@ -1647,10 +1675,11 @@ class HapticMediaCard extends HTMLElement {
       fill: q(".fill"), tl: q(".tl"), tr: q(".tr"),
       pp: q(".pp"), iplay: q(".i-play"), ipause: q(".i-pause"),
       prev: q(".prev"), next: q(".next"), pw: q(".pw"),
-      m1: q(".m1"), m2: q(".m2"), thumb: this.shadowRoot.querySelector(".thumb"),
+      m1: q(".m1"), m2: q(".m2"), m3: q(".m3"), msheen: q(".msheen"),
+      thumb: this.shadowRoot.querySelector(".thumb"),
     };
     const rnd = (a, b) => a + Math.random() * (b - a);
-    for (const el of [this._els.m1, this._els.m2]) {
+    for (const el of [this._els.m1, this._els.m2, this._els.m3, this._els.msheen]) {
       el.style.setProperty("--r", rnd(0.82, 1.28).toFixed(3));
       el.style.animationDelay = "-" + rnd(0, 30).toFixed(2) + "s";
       if (Math.random() < 0.5) el.style.animationDirection = "alternate-reverse";
@@ -1726,13 +1755,14 @@ class HapticMediaCard extends HTMLElement {
       this._config.name ?? (s ? s.attributes.friendly_name : this._config.entity);
 
     const accent = this._accent();
-    const c0 = mixHex(accent, "#FFFFFF", 0.35);
-    const c2 = mixHex(accent, "#000000", 0.30);
+    const c0 = mixHex(accent, "#FFFFFF", 0.48);
+    const c2 = mixHex(accent, "#000000", 0.42);
     bg.style.backgroundImage = glass
-      ? "linear-gradient(150deg," + hexRgba(c0, .58) + " 0%," + hexRgba(accent, .40) + " 45%," + hexRgba(c2, .58) + " 100%)"
+      ? "linear-gradient(150deg," + hexRgba(c0, .66) + " 0%," + hexRgba(accent, .46) + " 45%," + hexRgba(c2, .66) + " 100%)"
       : "linear-gradient(150deg," + c0 + " 0%," + accent + " 45%," + c2 + " 100%)";
     this._els.m1.style.setProperty("--c", mixHex(accent, "#FFFFFF", 0.55));
     this._els.m2.style.setProperty("--c", mixHex(accent, "#000000", 0.45));
+    this._els.m3.style.setProperty("--c", mixHex(accent, "#FFFFFF", 0.30));
 
     let art = s && s.attributes.entity_picture;
     if (!art && s && /youtube/i.test(s.attributes.app_name || "")) {
