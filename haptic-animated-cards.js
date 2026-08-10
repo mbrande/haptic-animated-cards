@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.3.6";
+const VERSION = "3.3.7";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1633,8 +1633,8 @@ class HapticMediaCard extends HTMLElement {
         }
         .row button:active { background: rgba(255,255,255,.22); transform: scale(.92); }
         .row button svg { width: 24px; height: 24px; fill: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
-        .row .pp { width: 52px; height: 52px; background: rgba(255,255,255,.20); }
-        .row .pp svg { width: 30px; height: 30px; }
+        .row .pp { width: 46px; height: 46px; background: rgba(255,255,255,.20); }
+        .row .pp svg { width: 26px; height: 26px; }
         .row .pw { margin-right: auto; }
         .row .sp { margin-left: auto; width: 42px; }
         .thumb {
