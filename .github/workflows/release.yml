@@ -43,9 +43,9 @@ jobs:
           TAG="${{ steps.tag.outputs.name }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG already exists - uploading asset only"
-            gh release upload "$TAG" haptic-thermostat-card.js --clobber
+            gh release upload "$TAG" haptic-animated-cards.js --clobber
           else
-            gh release create "$TAG" haptic-thermostat-card.js \
+            gh release create "$TAG" haptic-animated-cards.js \
               --title "$TAG" \
               --generate-notes
           fi

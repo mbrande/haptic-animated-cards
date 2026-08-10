@@ -85,9 +85,9 @@ app** (or hard-refresh the browser) so the new resource actually loads.
 
 ### Manual
 
-1. Copy `haptic-thermostat-card.js` into `/config/www/haptic-thermostat-card/`
+1. Copy `haptic-animated-cards.js` into `/config/www/haptic-thermostat-card/`
 2. **Settings → Dashboards → ⋮ → Resources → Add resource**
-   * **URL:** `/local/haptic-thermostat-card/haptic-thermostat-card.js?v=1`
+   * **URL:** `/local/haptic-thermostat-card/haptic-animated-cards.js?v=1`
    * **Type:** `JavaScript module`
 
 > ⚠️ `/local/` is cached for a long time. When you update the file you **must**
