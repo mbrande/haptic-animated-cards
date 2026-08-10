@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.1.9";
+const VERSION = "3.2.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1391,7 +1391,381 @@ class HapticTempPill extends HTMLElement {
 
 customElements.define("haptic-temp-pill", HapticTempPill);
 
+/* ------------------------------------------------------------------ */
+/* haptic-media-card: a glass media controller.
+ * The stock media-control card falls back to a flat accent panel with a
+ * placeholder glyph when the cast session provides no artwork - which is
+ * every YouTube session. This renders the same glass material as the rest
+ * of the suite, tinted by the APP that is playing, with a live progress
+ * bar and haptic transport controls. When artwork does exist it becomes a
+ * blurred backdrop under the glass. */
+
+const APP_ACCENTS = {
+  youtube: "#E62117",
+  "youtube music": "#FF0000",
+  plex: "#E5A00D",
+  spotify: "#1DB954",
+  netflix: "#B00610",
+  "prime video": "#00A8E1",
+  hulu: "#1CE783",
+  disney: "#0063E5",
+};
+
+const MFEAT = { PAUSE: 1, PREV: 16, NEXT: 32, TURN_ON: 128, TURN_OFF: 256, PLAY: 16384 };
+
+const fmtTime = (s) => {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
+};
+
+class HapticMediaCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._built = false;
+    this._timer = 0;
+  }
+
+  setConfig(config) {
+    if (!config || !config.entity) {
+      throw new Error("haptic-media-card: 'entity' is required");
+    }
+    if (config.entity.split(".")[0] !== "media_player") {
+      throw new Error("haptic-media-card: entity must be a media_player.* entity");
+    }
+    this._config = Object.assign(
+      { name: null, animation: true, animation_speed: 10, glass: true },
+      config
+    );
+    this._built = false;
+  }
+
+  getCardSize() { return 3; }
+  getGridOptions() { return { rows: 3, columns: 12, min_rows: 2 }; }
+  getLayoutOptions() { return { grid_rows: 3, grid_columns: 12, grid_min_rows: 2 }; }
+  static getStubConfig() { return { entity: "" }; }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._built) this._build();
+    this._render();
+    this._syncTimer();
+  }
+
+  disconnectedCallback() {
+    clearInterval(this._timer);
+    this._timer = 0;
+  }
+
+  get _s() {
+    return this._hass && this._config ? this._hass.states[this._config.entity] : undefined;
+  }
+
+  _svc(service, extra) {
+    haptic("light");
+    this._hass.callService("media_player", service,
+      Object.assign({ entity_id: this._config.entity }, extra || {}));
+  }
+
+  _build() {
+    this._built = true;
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display: block; height: 100%; }
+        ha-card {
+          position: relative; overflow: hidden;
+          height: 100%; box-sizing: border-box;
+          border: none; padding: 0; background: transparent;
+          color: #fff;
+        }
+        .bg {
+          position: absolute; inset: 0; isolation: isolate;
+          border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
+        }
+        .bg.glass {
+          backdrop-filter: blur(26px) saturate(1.8) brightness(1.06);
+          -webkit-backdrop-filter: blur(26px) saturate(1.8) brightness(1.06);
+        }
+        .bg.glass::after {
+          content: ""; position: absolute; inset: 0; pointer-events: none;
+          z-index: 2; border-radius: inherit;
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.30),
+            inset 0 0 7px 2px rgba(255,255,255,.13),
+            inset 0 1.5px 1px rgba(255,255,255,.28);
+        }
+        .bg.glass::before {
+          content: ""; position: absolute; inset: 0; pointer-events: none;
+          z-index: 2; border-radius: inherit;
+          background: linear-gradient(180deg,
+            rgba(255,255,255,.18) 0%,
+            rgba(255,255,255,.04) 45%,
+            rgba(255,255,255,.09) 100%);
+        }
+        /* artwork backdrop, when the session provides one */
+        .art {
+          position: absolute; inset: -8%;
+          background-size: cover; background-position: center;
+          filter: blur(16px) brightness(.62) saturate(1.25);
+          display: none;
+        }
+        .bg.hasart .art { display: block; }
+        .bg.hasart .blob { opacity: .5; }
+        .blob {
+          position: absolute; width: 130%; aspect-ratio: 1;
+          border-radius: 50%;
+          background: radial-gradient(circle, var(--c) 0%, transparent 66%);
+          mix-blend-mode: screen; opacity: .85;
+          will-change: transform;
+        }
+        .m1 { top: -120%; left: -30%; animation: mfloat1 calc(var(--drift-speed, 10s) * 1.2 * var(--r, 1)) ease-in-out infinite alternate; }
+        .m2 {
+          bottom: -130%; right: -25%;
+          mix-blend-mode: multiply; opacity: .55;
+          animation: mfloat2 calc(var(--drift-speed, 10s) * 1.8 * var(--r, 1)) ease-in-out infinite alternate;
+        }
+        @keyframes mfloat1 {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          100% { transform: translate3d(24%, 16%, 0) scale(1.1); }
+        }
+        @keyframes mfloat2 {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          100% { transform: translate3d(-20%, -12%, 0) scale(.95); }
+        }
+        .bg.no-anim .blob { animation: none; }
+        @media (prefers-reduced-motion: reduce) { .blob { animation: none; } }
+        .content {
+          position: relative; z-index: 3;
+          height: 100%; box-sizing: border-box;
+          display: flex; flex-direction: column; justify-content: space-between;
+          padding: 14px 18px 12px;
+        }
+        .hdr { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .hdr svg { width: 18px; height: 18px; flex: none; opacity: .9; fill: #fff; }
+        .dev {
+          font-size: 13px; font-weight: 600; opacity: .9; letter-spacing: .2px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          text-shadow: 0 1px 2px rgba(0,0,0,.25);
+        }
+        .app {
+          margin-left: auto; flex: none;
+          font-size: 11px; font-weight: 700; letter-spacing: .6px;
+          text-transform: uppercase; opacity: .85;
+          padding: 3px 9px; border-radius: 10px;
+          background: rgba(255,255,255,.18);
+          text-shadow: 0 1px 2px rgba(0,0,0,.2);
+        }
+        .title {
+          font-size: 17px; font-weight: 700; line-height: 1.25;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+          text-shadow: 0 1px 3px rgba(0,0,0,.3);
+        }
+        .artist {
+          font-size: 13px; font-weight: 500; opacity: .85; margin-top: 2px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          text-shadow: 0 1px 2px rgba(0,0,0,.25);
+        }
+        .prog { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .bar {
+          flex: 1; height: 4px; border-radius: 2px;
+          background: rgba(255,255,255,.25); overflow: hidden;
+        }
+        .fill {
+          height: 100%; width: 0%;
+          background: rgba(255,255,255,.9);
+          border-radius: 2px;
+        }
+        .t {
+          font-size: 11px; font-weight: 600; opacity: .8; flex: none;
+          font-feature-settings: "tnum";
+        }
+        .row {
+          display: flex; align-items: center; justify-content: center;
+          gap: 6px; margin-top: 4px;
+        }
+        .row button {
+          border: 0; cursor: pointer; color: #fff;
+          background: transparent; border-radius: 50%;
+          width: 42px; height: 42px;
+          display: grid; place-items: center;
+          transition: background .15s ease, transform .1s ease;
+        }
+        .row button:active { background: rgba(255,255,255,.22); transform: scale(.92); }
+        .row button svg { width: 24px; height: 24px; fill: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
+        .row .pp { width: 52px; height: 52px; background: rgba(255,255,255,.20); }
+        .row .pp svg { width: 30px; height: 30px; }
+        .row .pw { margin-right: auto; }
+        .row .sp { margin-left: auto; width: 42px; }
+        .idle-note { font-size: 14px; font-weight: 500; opacity: .8; }
+        [hidden] { display: none !important; }
+      </style>
+      <ha-card>
+        <div class="bg">
+          <div class="art"></div>
+          <div class="blob m1"></div>
+          <div class="blob m2"></div>
+        </div>
+        <div class="content">
+          <div class="hdr">
+            <svg viewBox="0 0 24 24"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
+            <div class="dev"></div>
+            <div class="app"></div>
+          </div>
+          <div>
+            <div class="title"></div>
+            <div class="artist"></div>
+            <div class="prog">
+              <div class="t tl">0:00</div>
+              <div class="bar"><div class="fill"></div></div>
+              <div class="t tr">0:00</div>
+            </div>
+          </div>
+          <div class="row">
+            <button class="pw" aria-label="Power"><svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.92 6.92 0 0 1 19 12a7 7 0 0 1-14 0c0-2.06.9-3.92 2.58-5.4L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z"/></svg></button>
+            <button class="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg></button>
+            <button class="pp" aria-label="Play or pause"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg><svg class="i-pause" viewBox="0 0 24 24" hidden><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>
+            <button class="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg></button>
+            <div class="sp"></div>
+          </div>
+        </div>
+      </ha-card>
+    `;
+    const q = (x) => this.shadowRoot.querySelector(x);
+    this._els = {
+      bg: q(".bg"), art: q(".art"), dev: q(".dev"), app: q(".app"),
+      title: q(".title"), artist: q(".artist"),
+      fill: q(".fill"), tl: q(".tl"), tr: q(".tr"),
+      pp: q(".pp"), iplay: q(".i-play"), ipause: q(".i-pause"),
+      prev: q(".prev"), next: q(".next"), pw: q(".pw"),
+      m1: q(".m1"), m2: q(".m2"),
+    };
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (const el of [this._els.m1, this._els.m2]) {
+      el.style.setProperty("--r", rnd(0.82, 1.28).toFixed(3));
+      el.style.animationDelay = "-" + rnd(0, 30).toFixed(2) + "s";
+      if (Math.random() < 0.5) el.style.animationDirection = "alternate-reverse";
+    }
+    this._els.pp.addEventListener("click", () => this._svc("media_play_pause"));
+    this._els.prev.addEventListener("click", () => this._svc("media_previous_track"));
+    this._els.next.addEventListener("click", () => this._svc("media_next_track"));
+    this._els.pw.addEventListener("click", () => {
+      const s = this._s;
+      this._svc(s && s.state !== "off" ? "turn_off" : "turn_on");
+    });
+  }
+
+  _accent() {
+    const s = this._s;
+    if (!s || s.state === "off" || s.state === "unavailable" || s.state === "idle") {
+      return "#6E6E73";
+    }
+    const app = (s.attributes.app_name || "").toLowerCase();
+    for (const k in APP_ACCENTS) {
+      if (app.indexOf(k) >= 0) return APP_ACCENTS[k];
+    }
+    return "#5A6BC0";
+  }
+
+  _progress() {
+    const s = this._s;
+    if (!s) return null;
+    const dur = s.attributes.media_duration;
+    let pos = s.attributes.media_position;
+    if (dur == null || pos == null) return null;
+    if (s.state === "playing" && s.attributes.media_position_updated_at) {
+      pos += (Date.now() - new Date(s.attributes.media_position_updated_at).getTime()) / 1000;
+    }
+    return { pos: Math.min(pos, dur), dur };
+  }
+
+  _syncTimer() {
+    const playing = this._s && this._s.state === "playing";
+    if (playing && !this._timer) {
+      this._timer = setInterval(() => this._renderProgress(), 1000);
+    } else if (!playing && this._timer) {
+      clearInterval(this._timer);
+      this._timer = 0;
+    }
+  }
+
+  _renderProgress() {
+    const p = this._progress();
+    const on = !!p && p.dur > 0;
+    this._els.fill.parentElement.parentElement.style.visibility = on ? "" : "hidden";
+    if (!on) return;
+    this._els.fill.style.width = (100 * p.pos / p.dur).toFixed(2) + "%";
+    this._els.tl.textContent = fmtTime(p.pos);
+    this._els.tr.textContent = fmtTime(p.dur);
+  }
+
+  _render() {
+    if (!this._els) return;
+    const s = this._s;
+    const glass = this._config.glass !== false;
+    const bg = this._els.bg;
+    bg.classList.toggle("glass", glass);
+
+    const spd = Number(this._config.animation_speed);
+    const animOn = this._config.animation !== false && spd !== 0;
+    bg.classList.toggle("no-anim", !animOn);
+    if (animOn) bg.style.setProperty("--drift-speed", (spd > 0 ? spd : 10) + "s");
+
+    this._els.dev.textContent =
+      this._config.name ?? (s ? s.attributes.friendly_name : this._config.entity);
+
+    const accent = this._accent();
+    const c0 = mixHex(accent, "#FFFFFF", 0.35);
+    const c2 = mixHex(accent, "#000000", 0.30);
+    bg.style.backgroundImage = glass
+      ? "linear-gradient(150deg," + hexRgba(c0, .58) + " 0%," + hexRgba(accent, .40) + " 45%," + hexRgba(c2, .58) + " 100%)"
+      : "linear-gradient(150deg," + c0 + " 0%," + accent + " 45%," + c2 + " 100%)";
+    this._els.m1.style.setProperty("--c", mixHex(accent, "#FFFFFF", 0.55));
+    this._els.m2.style.setProperty("--c", mixHex(accent, "#000000", 0.45));
+
+    const art = s && s.attributes.entity_picture;
+    bg.classList.toggle("hasart", !!art);
+    this._els.art.style.backgroundImage = art ? "url('" + art + "')" : "";
+
+    if (!s || s.state === "unavailable" || s.state === "off" || s.state === "idle") {
+      this._els.app.textContent = s ? s.state : "not found";
+      this._els.title.textContent = "Nothing playing";
+      this._els.title.classList.add("idle-note");
+      this._els.artist.textContent = "";
+      this._renderProgress();
+      this._els.iplay.hidden = false;
+      this._els.ipause.hidden = true;
+      return;
+    }
+
+    this._els.title.classList.remove("idle-note");
+    this._els.app.textContent = s.attributes.app_name || s.state;
+    this._els.title.textContent = s.attributes.media_title || "—";
+    this._els.artist.textContent = s.attributes.media_artist || "";
+    const playing = s.state === "playing";
+    this._els.iplay.hidden = playing;
+    this._els.ipause.hidden = !playing;
+    this._renderProgress();
+
+    const feat = s.attributes.supported_features || 0;
+    this._els.prev.style.visibility = (feat & MFEAT.PREV) ? "" : "hidden";
+    this._els.next.style.visibility = (feat & MFEAT.NEXT) ? "" : "hidden";
+    this._els.pw.style.visibility = (feat & (MFEAT.TURN_OFF | MFEAT.TURN_ON)) ? "" : "hidden";
+  }
+}
+
+customElements.define("haptic-media-card", HapticMediaCard);
+
+
 window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "haptic-media-card",
+  name: "Haptic Media Card",
+  description:
+    "Glass media controller tinted by the playing app, with haptic transport controls and a live progress bar.",
+  preview: true,
+});
 window.customCards.push({
   type: "haptic-temp-pill",
   name: "Haptic Temperature Pill",
