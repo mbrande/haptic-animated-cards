@@ -1,20 +1,17 @@
 # Haptic Animated Cards
 
 A suite of animated glass cards for Home Assistant with haptic feedback:
-the **thermostat dial**, **temperature pills** coloured by their reading, and a
-**media controller** tinted by the playing app.
-
-A circular temperature dial for Home Assistant, styled after the iOS Home app —
-**with haptic feedback while you drag it.**
+an iOS-style **thermostat dial**, **temperature pills** coloured by their
+reading, and a **media controller** tinted by the playing app.
 
 <p align="center">
   <img src="docs/screenshot.jpg" width="300"
        alt="Circular thermostat dial reading 74 degrees Fahrenheit with a blue gradient arc, an Idle status, the current temperature below, and a Cool mode selector pill">
 </p>
 
-You feel a tick for every degree you cross, and a firmer tap when the new
-temperature is committed. As far as I can tell it is the only Home Assistant
-temperature control that does.
+You feel a tick for every degree you cross on the dial, and a firmer tap when
+the new temperature is committed. As far as I can tell it is the only Home
+Assistant temperature control that does.
 
 ---
 
@@ -63,6 +60,99 @@ have haptic feedback support and/or a vibration motor can expect to feel some ty
 of feedback." iOS maps the types onto the Taptic Engine and they feel distinct;
 Android maps them onto whatever vibration motor the device has.
 
+## The cards
+
+One file, three cards. In the dashboard editor, search for **haptic** and all
+three appear: **Haptic Thermostat Card**, **Haptic Temperature Pill** and
+**Haptic Media Card**.
+
+### 🌡 haptic-thermostat-card
+
+A compact glass tile showing the current temperature, tinted by mode, with a
+slowly drifting animated gradient. Tapping it expands a full-screen circular
+dial styled after the iOS Home app — so scrolling the dashboard can never
+change your setpoint. Drag the ring and you feel a tick per degree; release to
+commit.
+
+```yaml
+type: custom:haptic-thermostat-card
+entity: climate.your_thermostat
+name: House            # optional, defaults to the entity's friendly name
+animation: true        # optional, set false to stop the gradient drifting
+animation_speed: 10    # optional, seconds per cycle. Lower = faster. 0 = off
+glass: true            # optional, liquid-glass translucency; false for a solid tile
+liquid: false          # optional, experimental WebGL renderer (edge refraction); the default CSS glass is the reference look
+modes: true            # optional, set false to hide the HVAC mode selector
+min: 45                # optional, defaults to the entity's min_temp
+max: 95                # optional, defaults to the entity's max_temp
+step: 1                # optional, defaults to target_temp_step
+```
+
+What it supports:
+
+* **Single setpoint** (`heat`, `cool`, …) — one handle, arc from the minimum.
+* **Dual setpoint** (`heat_cool`) — two handles with a warm-to-cool band between
+  them. Range mode is detected from `target_temp_low`/`target_temp_high` being
+  present rather than from the mode's name, because implementations disagree
+  about whether it is called `heat_cool` or `auto` — but they all agree on the
+  attributes.
+* **HVAC mode switching** via a single pill. It is a native `<select>`, so iOS
+  renders it as the system wheel picker and it stays keyboard and screen-reader
+  accessible.
+* Ring colour follows `hvac_action` where available, so it is orange only while
+  actually heating.
+
+The tile's gradient drifts slowly by default. `animation_speed: 3` makes it
+obvious, `animation_speed: 30` makes it barely perceptible, and `animation: false`
+stops it entirely. The card also honours `prefers-reduced-motion` regardless of
+this setting.
+
+### 🌤 haptic-temp-pill
+
+The same glass material as a compact one-row sensor pill, coloured by the
+temperature itself — deep blue at 50°F through cyan, amber and orange to deep
+red at 90°F+, interpolated smoothly between anchors. The thermometer icon tints
+to match. Celsius sensors are converted for the colour mapping only; the
+displayed value keeps the sensor's own unit. Tapping opens the entity's
+more-info dialog, with a haptic tap.
+
+```yaml
+type: custom:haptic-temp-pill
+entity: sensor.outside_temperature
+name: Outside          # optional
+animation: true        # optional, same semantics as the thermostat card
+animation_speed: 10    # optional
+glass: true            # optional
+```
+
+### 📺 haptic-media-card
+
+A glass media controller for a `media_player` entity that takes its colour from
+what is playing: the whole card tints to the playing app's brand colour
+(YouTube red, Netflix red, Hulu green, Prime Video blue, Plex amber, …) with
+the same animated orb-and-sheen treatment as the thermostat, and goes calm grey
+when the player is off or idle.
+
+* **Artwork**: shows the player's `entity_picture` when one exists, and can
+  derive a YouTube thumbnail from the video id when a TV-native session exposes
+  it. When no artwork exists at all, it shows the playing **app's logo** on a
+  frosted tile instead; apps it does not recognise get a monogram.
+* **Progress**: a live position bar for normal media, and a red-dot **LIVE**
+  badge for streams that report no duration (live TV).
+* **Transport**: play/pause, previous/next and power, each shown only if the
+  player's `supported_features` actually supports it. Every control fires a
+  haptic tap.
+
+```yaml
+type: custom:haptic-media-card
+entity: media_player.living_room_tv
+name: Living Room TV   # optional, defaults to the entity's friendly name
+accent: "#0A84FF"      # optional, fixed tint override; omit to follow the playing app's colour
+animation: true        # optional
+animation_speed: 10    # optional, seconds per cycle. Lower = faster
+glass: true            # optional
+```
+
 ## Install
 
 ### HACS (recommended)
@@ -94,79 +184,16 @@ app** (or hard-refresh the browser) so the new resource actually loads.
 > change the `?v=` number, or you will be running the old copy and concluding your
 > change did nothing.
 
-### Add the card to a dashboard
+### Add a card to a dashboard
 
-Edit a dashboard → **Add card** → search for **haptic** — all three cards appear:
-**Haptic Thermostat Card**, **Haptic Temperature Pill** and **Haptic Media Card**.
-
-Or paste the YAML directly:
-
-```yaml
-type: custom:haptic-thermostat-card
-entity: climate.your_thermostat
-name: House            # optional, defaults to the entity's friendly name
-animation: true        # optional, set false to stop the gradient drifting
-animation_speed: 10    # optional, seconds per cycle. Lower = faster. 0 = off
-glass: true            # optional, liquid-glass translucency; false for a solid tile
-liquid: false          # optional, experimental WebGL renderer (edge refraction); the default CSS glass is the reference look
-modes: true            # optional, set false to hide the HVAC mode selector
-min: 45                # optional, defaults to the entity's min_temp
-max: 95                # optional, defaults to the entity's max_temp
-step: 1                # optional, defaults to target_temp_step
-```
-
-The tile's gradient drifts slowly by default. `animation_speed: 3` makes it
-obvious, `animation_speed: 30` makes it barely perceptible, and `animation: false`
-stops it entirely. The card also honours `prefers-reduced-motion` regardless of
-this setting.
-
-## Config
-
-```yaml
-type: custom:haptic-thermostat-card
-entity: climate.your_thermostat
-name: Hallway     # optional, defaults to the entity's friendly name
-min: 45           # optional, defaults to the entity's min_temp
-max: 95           # optional, defaults to the entity's max_temp
-step: 1           # optional, defaults to target_temp_step
-modes: true       # optional, set false to hide the HVAC mode selector
-```
-
-## What it supports
-
-* **Single setpoint** (`heat`, `cool`, …) — one handle, arc from the minimum.
-* **Dual setpoint** (`heat_cool`) — two handles with a warm-to-cool band between
-  them. Range mode is detected from `target_temp_low`/`target_temp_high` being
-  present rather than from the mode's name, because implementations disagree
-  about whether it is called `heat_cool` or `auto` — but they all agree on the
-  attributes.
-* **HVAC mode switching** via a single pill. It is a native `<select>`, so iOS
-  renders it as the system wheel picker and it stays keyboard and screen-reader
-  accessible.
-* Ring colour follows `hvac_action` where available, so it is orange only while
-  actually heating.
-
-## Bonus card: haptic-temp-pill
-
-The same glass material as a compact sensor pill, coloured by the temperature
-itself - deep blue at 50F through cyan, amber and orange to deep red at 90F+,
-interpolated smoothly between anchors. Celsius sensors are converted for the
-colour mapping only; the displayed value keeps the sensor's own unit. Tapping
-opens the entity's more-info dialog, with a haptic tap.
-
-```yaml
-type: custom:haptic-temp-pill
-entity: sensor.outside_temperature
-name: Outside          # optional
-animation: true        # optional, same semantics as the thermostat card
-animation_speed: 10    # optional
-glass: true            # optional
-```
+Edit a dashboard → **Add card** → search for **haptic**, pick a card, and set
+its `entity`. Or paste the YAML from [The cards](#the-cards) above.
 
 ## Design notes
 
 * Vanilla custom element and Shadow DOM. No Lit, no build step, no dependencies —
-  a frontend framework bump cannot break it.
+  a frontend framework bump cannot break it. The media card's app logos are
+  inlined too; the file makes zero network requests of its own.
 * `climate.set_temperature` is called **on pointer release**, not during the drag.
   A drag emits dozens of `pointermove` events; calling the service on each makes
   the thermostat lag and the ring fight your finger.
