@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.3.9";
+const VERSION = "3.4.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1607,6 +1607,9 @@ class HapticMediaCard extends HTMLElement {
           text-shadow: 0 1px 2px rgba(0,0,0,.25);
         }
         .prog { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .prog.live .bar { visibility: hidden; }
+        .prog.live .tl { font-weight: 700; letter-spacing: .06em; }
+        .prog.live .tl::before { content: "● "; color: #FF453A; }
         .bar {
           flex: 1; height: 4px; border-radius: 2px;
           background: rgba(255,255,255,.25); overflow: hidden;
@@ -1694,7 +1697,7 @@ class HapticMediaCard extends HTMLElement {
           <div class="row">
             <button class="pw" aria-label="Power"><svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.92 6.92 0 0 1 19 12a7 7 0 0 1-14 0c0-2.06.9-3.92 2.58-5.4L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z"/></svg></button>
             <button class="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg></button>
-            <button class="pp" aria-label="Play or pause"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5z"/></svg><svg class="i-pause" viewBox="0 0 24 24" hidden><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>
+            <button class="pp" aria-label="Play or pause"><svg class="i-play" viewBox="0 0 24 24" style="display:block"><path d="M8 5v14l11-7L8 5z"/></svg><svg class="i-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>
             <button class="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg></button>
             <div class="sp"></div>
           </div>
@@ -1771,8 +1774,20 @@ class HapticMediaCard extends HTMLElement {
 
   _renderProgress() {
     const p = this._progress();
+    const s = this._s;
+    const prog = this._els.fill.parentElement.parentElement;
     const on = !!p && p.dur > 0;
-    this._els.fill.parentElement.parentElement.style.visibility = on ? "" : "hidden";
+    // Live TV: playing but the stream has no duration - badge it, don't blank it.
+    const live = !on && !!s && s.state === "playing" && !s.attributes.media_duration
+      && !!(s.attributes.media_title || s.attributes.app_name);
+    prog.classList.toggle("live", live);
+    prog.style.visibility = on || live ? "" : "hidden";
+    if (live) {
+      this._els.fill.style.width = "0%";
+      this._els.tl.textContent = "LIVE";
+      this._els.tr.textContent = "";
+      return;
+    }
     if (!on) return;
     this._els.fill.style.width = (100 * p.pos / p.dur).toFixed(2) + "%";
     this._els.tl.textContent = fmtTime(p.pos);
@@ -1860,8 +1875,8 @@ class HapticMediaCard extends HTMLElement {
       this._els.title.classList.add("idle-note");
       this._els.artist.textContent = "";
       this._renderProgress();
-      this._els.iplay.hidden = false;
-      this._els.ipause.hidden = true;
+      this._els.iplay.style.display = "block";
+      this._els.ipause.style.display = "none";
       return;
     }
 
@@ -1870,8 +1885,9 @@ class HapticMediaCard extends HTMLElement {
     this._els.title.textContent = s.attributes.media_title || "—";
     this._els.artist.textContent = s.attributes.media_artist || "";
     const playing = s.state === "playing";
-    this._els.iplay.hidden = playing;
-    this._els.ipause.hidden = !playing;
+    // SVGElement has no .hidden - display is the only reliable toggle.
+    this._els.iplay.style.display = playing ? "none" : "block";
+    this._els.ipause.style.display = playing ? "block" : "none";
     this._renderProgress();
 
     const feat = s.attributes.supported_features || 0;
