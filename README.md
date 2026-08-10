@@ -1,4 +1,8 @@
-# haptic-thermostat-card
+# Haptic Animated Cards
+
+A suite of animated glass cards for Home Assistant with haptic feedback:
+the **thermostat dial**, **temperature pills** coloured by their reading, and a
+**media controller** tinted by the playing app.
 
 A circular temperature dial for Home Assistant, styled after the iOS Home app —
 **with haptic feedback while you drag it.**
@@ -63,13 +67,13 @@ Android maps them onto whatever vibration motor the device has.
 
 ### HACS (recommended)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mbrande&repository=haptic-thermostat-card&category=plugin)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mbrande&repository=haptic-animated-cards&category=plugin)
 
 Or add it by hand:
 
 1. Open **HACS** in Home Assistant
 2. Top-right **⋮** menu → **Custom repositories**
-3. **Repository:** `https://github.com/mbrande/haptic-thermostat-card`
+3. **Repository:** `https://github.com/mbrande/haptic-animated-cards`
 4. **Type:** `Dashboard`
 5. Click **Add**, then find **Haptic Thermostat Card** in the HACS list and click
    **Download**
