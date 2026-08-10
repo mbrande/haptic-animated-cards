@@ -75,7 +75,7 @@ Or add it by hand:
 2. Top-right **⋮** menu → **Custom repositories**
 3. **Repository:** `https://github.com/mbrande/haptic-animated-cards`
 4. **Type:** `Dashboard`
-5. Click **Add**, then find **Haptic Thermostat Card** in the HACS list and click
+5. Click **Add**, then find **Haptic Animated Cards** in the HACS list and click
    **Download**
 
 **HACS registers the dashboard resource for you** — there is nothing else to add.
@@ -96,7 +96,8 @@ app** (or hard-refresh the browser) so the new resource actually loads.
 
 ### Add the card to a dashboard
 
-Edit a dashboard → **Add card** → search for **Haptic Thermostat Card**.
+Edit a dashboard → **Add card** → search for **haptic** — all three cards appear:
+**Haptic Thermostat Card**, **Haptic Temperature Pill** and **Haptic Media Card**.
 
 Or paste the YAML directly:
 
