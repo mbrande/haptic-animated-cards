@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.3.2";
+const VERSION = "3.3.3";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1411,6 +1411,15 @@ const APP_ACCENTS = {
   disney: "#0063E5",
 };
 
+/* Brand glyphs for the no-artwork fallback, inlined so the card keeps its
+ * zero-network-dependency property. Real artwork always wins the slot. */
+const APP_LOGOS = {
+  youtube: "M10,15L15.19,12L10,9V15M21.56,7.17C21.69,7.64 21.78,8.27 21.84,9.07C21.91,9.87 21.94,10.56 21.94,11.16L22,12C22,14.19 21.84,15.8 21.56,16.83C21.31,17.73 20.73,18.31 19.83,18.56C19.36,18.69 18.5,18.78 17.18,18.84C15.88,18.91 14.69,18.94 13.59,18.94L12,19C7.81,19 5.2,18.84 4.17,18.56C3.27,18.31 2.69,17.73 2.44,16.83C2.31,16.36 2.22,15.73 2.16,14.93C2.09,14.13 2.06,13.44 2.06,12.84L2,12C2,9.81 2.16,8.2 2.44,7.17C2.69,6.27 3.27,5.69 4.17,5.44C4.64,5.31 5.5,5.22 6.82,5.16C8.12,5.09 9.31,5.06 10.41,5.06L12,5C16.19,5 18.8,5.16 19.83,5.44C20.73,5.69 21.31,6.27 21.56,7.17Z",
+  netflix: "M6.5,2H10.5L13.5,10.63V2H17.5V22C16.17,21.76 14.83,21.56 13.5,21.41L10.5,12.87V21.06C9.17,21.16 7.83,21.31 6.5,21.5V2Z",
+  spotify: "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.56,15.85C16.38,16.14 16,16.23 15.71,16.05C13.38,14.63 10.45,14.31 7,15.09C6.67,15.17 6.34,14.96 6.26,14.63C6.18,14.3 6.39,13.97 6.72,13.89C10.5,13.03 13.75,13.4 16.36,15C16.65,15.17 16.74,15.56 16.56,15.85M17.78,13.14C17.56,13.5 17.08,13.62 16.72,13.39C14.06,11.75 10,11.28 6.85,12.24C6.45,12.36 6.03,12.14 5.91,11.74C5.79,11.34 6.01,10.92 6.41,10.8C10,9.71 14.47,10.23 17.53,12.11C17.89,12.33 18,12.81 17.78,13.14M17.89,10.32C14.7,8.43 9.44,8.26 6.4,9.18C5.92,9.33 5.41,9.06 5.26,8.57C5.11,8.09 5.38,7.58 5.87,7.43C9.36,6.37 15.16,6.57 18.83,8.75C19.27,9 19.41,9.58 19.15,10C18.89,10.46 18.31,10.6 17.89,10.32Z",
+  plex: "M4.5,2H10.5L16.5,12L10.5,22H4.5L10.5,12L4.5,2Z",
+};
+
 const MFEAT = { PAUSE: 1, PREV: 16, NEXT: 32, TURN_ON: 128, TURN_OFF: 256, PLAY: 16384 };
 
 const fmtTime = (s) => {
@@ -1582,7 +1591,7 @@ class HapticMediaCard extends HTMLElement {
           background: rgba(255,255,255,.18);
           text-shadow: 0 1px 2px rgba(0,0,0,.2);
         }
-        .bg.hasart ~ .content .title, .bg.hasart ~ .content .artist { padding-right: 104px; }
+        .bg.haspad ~ .content .title, .bg.haspad ~ .content .artist { padding-right: 104px; }
         .title {
           font-size: 17px; font-weight: 700; line-height: 1.25;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -1631,6 +1640,19 @@ class HapticMediaCard extends HTMLElement {
           box-shadow: 0 4px 14px rgba(0,0,0,.4);
           z-index: 3;
         }
+        .applogo {
+          position: absolute; right: 16px; top: 44px;
+          width: 64px; height: 64px; border-radius: 14px;
+          background: rgba(255,255,255,.16);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 4px 14px rgba(0,0,0,.3);
+          display: grid; place-items: center;
+          z-index: 3;
+        }
+        .applogo svg { width: 40px; height: 40px; fill: #fff; filter: drop-shadow(0 1px 3px rgba(0,0,0,.35)); }
+        .applogo .mono {
+          font-size: 30px; font-weight: 800; color: #fff;
+          text-shadow: 0 1px 3px rgba(0,0,0,.35);
+        }
         .idle-note { font-size: 14px; font-weight: 500; opacity: .8; }
         [hidden] { display: none !important; }
       </style>
@@ -1643,6 +1665,7 @@ class HapticMediaCard extends HTMLElement {
           <div class="msheen"></div>
         </div>
         <img class="thumb" hidden alt="">
+        <div class="applogo" hidden><svg viewBox="0 0 24 24"><path d=""></path></svg><span class="mono" hidden></span></div>
         <div class="content">
           <div class="hdr">
             <svg viewBox="0 0 24 24"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
@@ -1677,6 +1700,8 @@ class HapticMediaCard extends HTMLElement {
       prev: q(".prev"), next: q(".next"), pw: q(".pw"),
       m1: q(".m1"), m2: q(".m2"), m3: q(".m3"), msheen: q(".msheen"),
       thumb: this.shadowRoot.querySelector(".thumb"),
+      logo: q(".applogo"), logoSvg: q(".applogo svg"),
+      logoPath: q(".applogo path"), logoMono: q(".applogo .mono"),
     };
     const rnd = (a, b) => a + Math.random() * (b - a);
     for (const el of [this._els.m1, this._els.m2, this._els.m3, this._els.msheen]) {
@@ -1777,6 +1802,27 @@ class HapticMediaCard extends HTMLElement {
     this._els.art.style.backgroundImage = art ? "url('" + art + "')" : "";
     this._els.thumb.hidden = !art;
     if (art) this._els.thumb.src = art;
+    // No artwork but something is playing: show the app itself in the slot.
+    let logoOn = false;
+    const activeNow = s && !["off", "idle", "unavailable", "unknown"].includes(s.state);
+    if (!art && activeNow) {
+      const app = (s.attributes.app_name || "").toLowerCase();
+      let glyph = "";
+      for (const k in APP_LOGOS) { if (app.indexOf(k) >= 0) { glyph = APP_LOGOS[k]; break; } }
+      if (glyph) {
+        this._els.logoPath.setAttribute("d", glyph);
+        this._els.logoSvg.hidden = false;
+        this._els.logoMono.hidden = true;
+        logoOn = true;
+      } else if (s.attributes.app_name) {
+        this._els.logoMono.textContent = s.attributes.app_name[0].toUpperCase();
+        this._els.logoSvg.hidden = true;
+        this._els.logoMono.hidden = false;
+        logoOn = true;
+      }
+    }
+    this._els.logo.hidden = !logoOn;
+    bg.classList.toggle("haspad", !!art || logoOn);
 
     if (!s || s.state === "unavailable" || s.state === "off" || s.state === "idle") {
       this._els.app.textContent = s ? s.state : "not found";
