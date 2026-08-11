@@ -96,6 +96,9 @@ What it supports:
   present rather than from the mode's name, because implementations disagree
   about whether it is called `heat_cool` or `auto` — but they all agree on the
   attributes.
+* **Fan speed on the dial** — in `fan_only` mode (when the entity exposes
+  `fan_modes`) the dial becomes a stepped fan-speed selector with one haptic
+  tick per speed, committed on release via `climate.set_fan_mode`.
 * **HVAC mode switching** via a single pill. It is a native `<select>`, so iOS
   renders it as the system wheel picker and it stays keyboard and screen-reader
   accessible.

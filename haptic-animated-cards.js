@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.4.1";
+const VERSION = "3.5.0";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -187,9 +187,9 @@ class HapticThermostatCard extends HTMLElement {
 
   /* ---------- model ---------- */
 
-  get _min() { const s = this._s; return this._config.min ?? (s && s.attributes.min_temp) ?? 45; }
-  get _max() { const s = this._s; return this._config.max ?? (s && s.attributes.max_temp) ?? 95; }
-  get _step() { const s = this._s; return this._config.step ?? (s && s.attributes.target_temp_step) ?? 1; }
+  get _min() { if (this._fanList) return 0; const s = this._s; return this._config.min ?? (s && s.attributes.min_temp) ?? 45; }
+  get _max() { const f = this._fanList; if (f) return f.length - 1; const s = this._s; return this._config.max ?? (s && s.attributes.max_temp) ?? 95; }
+  get _step() { if (this._fanList) return 1; const s = this._s; return this._config.step ?? (s && s.attributes.target_temp_step) ?? 1; }
 
   /* Range mode is detected from the ATTRIBUTES, not the mode name:
    * implementations disagree over heat_cool vs auto, but all agree on these. */
@@ -198,24 +198,38 @@ class HapticThermostatCard extends HTMLElement {
     return !!s && s.attributes.target_temp_low != null && s.attributes.target_temp_high != null;
   }
 
+  /* fan_only: the dial drives fan speed instead of a setpoint. Entity order
+   * is preserved verbatim; needs at least two speeds to be a dial. */
+  get _fanList() {
+    const s = this._s;
+    return s && s.state === "fan_only" && Array.isArray(s.attributes.fan_modes)
+      && s.attributes.fan_modes.length >= 2 ? s.attributes.fan_modes : null;
+  }
+
   get _values() {
     if (this._pending) return this._pending;
     const s = this._s;
     if (!s) return null;
-    const state = this._isRange
-      ? { low: Number(s.attributes.target_temp_low), high: Number(s.attributes.target_temp_high) }
-      : s.attributes.temperature != null ? { t: Number(s.attributes.temperature) } : null;
+    const fan = this._fanList;
+    const state = fan
+      ? { f: Math.max(0, fan.indexOf(s.attributes.fan_mode)) }
+      : this._isRange
+        ? { low: Number(s.attributes.target_temp_low), high: Number(s.attributes.target_temp_high) }
+        : s.attributes.temperature != null ? { t: Number(s.attributes.temperature) } : null;
     // Optimistic hold: after a commit the entity keeps reporting the OLD
-    // setpoint until the round-trip completes; rendering it bounces the dial.
+    // value until the round-trip completes; rendering it bounces the dial.
     // Hold the committed value until the entity confirms it, but never past
-    // 8s - a thermostat that clamps or rejects must win in the end.
+    // 8s - a device that clamps or rejects must win in the end.
     const c = this._committed;
     if (c) {
       const near = (x, y) => x != null && y != null && Math.abs(x - y) < 0.01;
-      const shapeOk = c.v.t != null ? !this._isRange : this._isRange;
-      const match = !!state && (c.v.t != null
-        ? near(state.t, c.v.t)
-        : near(state.low, c.v.low) && near(state.high, c.v.high));
+      const shapeOk = c.v.f != null ? !!fan
+        : c.v.t != null ? (!fan && !this._isRange) : (!fan && this._isRange);
+      const match = !!state && (c.v.f != null
+        ? state.f === c.v.f
+        : c.v.t != null
+          ? near(state.t, c.v.t)
+          : near(state.low, c.v.low) && near(state.high, c.v.high));
       if (match || !shapeOk || Date.now() - c.ts > 8000) this._committed = null;
       else return c.v;
     }
@@ -807,6 +821,9 @@ class HapticThermostatCard extends HTMLElement {
           gap: 14px; flex-wrap: wrap; width: 100%;
         }
         .cur { font-size: 15px; font-weight: 500; opacity: .7; }
+        /* Desktop browsers paint options with the select's inherited mode
+         * tint - every option came out blue. Neutral them explicitly. */
+        .sel option { background-color: #2c2c2e; color: #fff; }
         .sel {
           font: inherit; font-size: 14px; font-weight: 600; letter-spacing: .3px;
           -webkit-appearance: none; appearance: none; border: 0; cursor: pointer;
@@ -943,7 +960,9 @@ class HapticThermostatCard extends HTMLElement {
     this._dragging = true;
     this._pEls.svg.setPointerCapture(evt.pointerId);
     this._lastHapticStep = null;
-    if (v.t !== undefined) {
+    if (v.f !== undefined) {
+      this._activeHandle = "f";
+    } else if (v.t !== undefined) {
       this._activeHandle = "t";
     } else {
       const t = this._tempFromPointer(evt);
@@ -959,9 +978,10 @@ class HapticThermostatCard extends HTMLElement {
     let t = this._tempFromPointer(evt);
     const p = this._pending;
     const step = this._step;
-    if (this._activeHandle === "t") {
-      if (p.t === t) return;
-      p.t = t;
+    if (this._activeHandle === "t" || this._activeHandle === "f") {
+      const key = this._activeHandle;
+      if (p[key] === t) return;
+      p[key] = t;
     } else if (this._activeHandle === "low") {
       t = Math.min(t, p.high - step);          // keep the handles from crossing
       if (p.low === t) return;
@@ -990,6 +1010,16 @@ class HapticThermostatCard extends HTMLElement {
     if (!p || !s) return;
     // Commit on release: a drag fires dozens of moves, and calling the service on
     // each makes the thermostat lag and the ring fight your finger.
+    if (h === "f") {
+      const list = this._fanList || [];
+      const mode = list[p.f];
+      if (!mode || mode === s.attributes.fan_mode) return;
+      haptic("light");
+      this._committed = { v: p, ts: Date.now() };
+      this._hass.callService("climate", "set_fan_mode",
+        { entity_id: this._config.entity, fan_mode: mode });
+      return;
+    }
     let data;
     if (h === "t") {
       if (Number(s.attributes.temperature) === p.t) return;
@@ -1072,6 +1102,18 @@ class HapticThermostatCard extends HTMLElement {
       els.knobHi.setAttribute("r", "0");
       els.target.textContent = "--";
       els.target.classList.remove("range");
+    } else if (v.f !== undefined) {
+      const list = this._fanList || [];
+      const end = this._angleFor(v.f);
+      els.value.setAttribute("d", arcPath(100, 100, R, START_ANGLE, end));
+      els.grad.setAttribute("x1", 26); els.grad.setAttribute("y1", 174);
+      els.grad.setAttribute("x2", 174); els.grad.setAttribute("y2", 26);
+      const k = polar(100, 100, R, end);
+      els.knobLo.setAttribute("r", "0");
+      els.knobHi.setAttribute("cx", k.x); els.knobHi.setAttribute("cy", k.y);
+      els.knobHi.setAttribute("r", "10");
+      els.target.classList.remove("range");
+      els.target.textContent = String(list[v.f] || "").toUpperCase();
     } else if (v.t !== undefined) {
       const end = this._angleFor(v.t);
       els.value.setAttribute("d", arcPath(100, 100, R, START_ANGLE, end));
