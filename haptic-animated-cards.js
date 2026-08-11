@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.5.0";
+const VERSION = "3.5.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -564,7 +564,8 @@ class HapticThermostatCard extends HTMLElement {
     const dp = this._step < 1 ? 1 : 0;
     const mode = MODE_LABEL[s.state] || s.state;
     let target = "";
-    if (v && v.t !== undefined) target = ` to ${v.t.toFixed(dp)}${unit}`;
+    if (v && v.f !== undefined) target = " " + String((this._fanList || [])[v.f] || "");
+    else if (v && v.t !== undefined) target = ` to ${v.t.toFixed(dp)}${unit}`;
     else if (v) target = ` ${v.low.toFixed(dp)}–${v.high.toFixed(dp)}${unit}`;
     this._tEls.sub.textContent = s.state === "off" ? "Off" : mode + target;
   }
@@ -834,7 +835,7 @@ class HapticThermostatCard extends HTMLElement {
           background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><path d="M1 1.5L6 6.5L11 1.5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>');
         }
         .sel:focus { outline: none; }
-        .sel option { color: initial; background: initial; font-weight: 500; }
+        .sel option { font-weight: 500; }
       </style>
       <div class="back">
         <div class="blur"></div>
@@ -1065,6 +1066,11 @@ class HapticThermostatCard extends HTMLElement {
       const o = document.createElement("option");
       o.value = m;
       o.textContent = MODE_LABEL[m] || m.replace(/_/g, " ");
+      // Inline, not CSS: Chromium's native popup ignored two stylesheet
+      // attempts and painted rows with the select's mode tint. The option's
+      // own inline style is the one layer the popup reliably honours.
+      o.style.backgroundColor = "#2c2c2e";
+      o.style.color = "#fff";
       els.sel.appendChild(o);
     }
   }
