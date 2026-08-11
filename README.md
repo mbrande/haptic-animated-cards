@@ -66,6 +66,14 @@ One file, three cards. In the dashboard editor, search for **haptic** and all
 three appear: **Haptic Thermostat Card**, **Haptic Temperature Pill** and
 **Haptic Media Card**.
 
+<p align="center">
+  <img src="docs/tile-and-pills.jpg" width="640"
+       alt="Dashboard with the glass thermostat tile reading 74 degrees, Cool to 72, beside five temperature pills coloured by their readings: Outside 75.0 in blue, Guest Room 79.5 in amber, Garage 85.3 in orange, Master Bedroom 75.1 in blue, Studio 77.7 in amber">
+</p>
+
+*The thermostat tile and five temperature pills on a live dashboard — each pill
+takes its colour from its own reading.*
+
 ### 🌡 haptic-thermostat-card
 
 A compact glass tile showing the current temperature, tinted by mode, with a
