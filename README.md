@@ -5,6 +5,8 @@ an iOS-style **thermostat dial**, **temperature pills** coloured by their
 reading, and a **media controller** tinted by the playing app.
 
 <p align="center">
+  <img src="docs/tile-and-pills.jpg" width="470"
+       alt="Dashboard with the glass thermostat tile reading 74 degrees, Cool to 72, beside five temperature pills coloured by their readings: Outside 75.0 in blue, Guest Room 79.5 in amber, Garage 85.3 in orange, Master Bedroom 75.1 in blue, Studio 77.7 in amber">
   <img src="docs/screenshot.jpg" width="300"
        alt="Circular thermostat dial reading 74 degrees Fahrenheit with a blue gradient arc, an Idle status, the current temperature below, and a Cool mode selector pill">
 </p>
@@ -65,14 +67,6 @@ Android maps them onto whatever vibration motor the device has.
 One file, three cards. In the dashboard editor, search for **haptic** and all
 three appear: **Haptic Thermostat Card**, **Haptic Temperature Pill** and
 **Haptic Media Card**.
-
-<p align="center">
-  <img src="docs/tile-and-pills.jpg" width="640"
-       alt="Dashboard with the glass thermostat tile reading 74 degrees, Cool to 72, beside five temperature pills coloured by their readings: Outside 75.0 in blue, Guest Room 79.5 in amber, Garage 85.3 in orange, Master Bedroom 75.1 in blue, Studio 77.7 in amber">
-</p>
-
-*The thermostat tile and five temperature pills on a live dashboard — each pill
-takes its colour from its own reading.*
 
 ### 🌡 haptic-thermostat-card
 
