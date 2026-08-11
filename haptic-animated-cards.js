@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.4.0";
+const VERSION = "3.4.1";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -202,10 +202,24 @@ class HapticThermostatCard extends HTMLElement {
     if (this._pending) return this._pending;
     const s = this._s;
     if (!s) return null;
-    if (this._isRange) {
-      return { low: Number(s.attributes.target_temp_low), high: Number(s.attributes.target_temp_high) };
+    const state = this._isRange
+      ? { low: Number(s.attributes.target_temp_low), high: Number(s.attributes.target_temp_high) }
+      : s.attributes.temperature != null ? { t: Number(s.attributes.temperature) } : null;
+    // Optimistic hold: after a commit the entity keeps reporting the OLD
+    // setpoint until the round-trip completes; rendering it bounces the dial.
+    // Hold the committed value until the entity confirms it, but never past
+    // 8s - a thermostat that clamps or rejects must win in the end.
+    const c = this._committed;
+    if (c) {
+      const near = (x, y) => x != null && y != null && Math.abs(x - y) < 0.01;
+      const shapeOk = c.v.t != null ? !this._isRange : this._isRange;
+      const match = !!state && (c.v.t != null
+        ? near(state.t, c.v.t)
+        : near(state.low, c.v.low) && near(state.high, c.v.high));
+      if (match || !shapeOk || Date.now() - c.ts > 8000) this._committed = null;
+      else return c.v;
     }
-    return s.attributes.temperature != null ? { t: Number(s.attributes.temperature) } : null;
+    return state;
   }
 
   get _rampKey() {
@@ -986,6 +1000,7 @@ class HapticThermostatCard extends HTMLElement {
       data = { target_temp_low: p.low, target_temp_high: p.high };
     }
     haptic("light");
+    this._committed = { v: p, ts: Date.now() };
     this._hass.callService("climate", "set_temperature",
       Object.assign({ entity_id: this._config.entity }, data));
   }
