@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.5.1";
+const VERSION = "3.5.2";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1649,15 +1649,8 @@ class HapticMediaCard extends HTMLElement {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
           text-shadow: 0 1px 2px rgba(0,0,0,.25);
         }
-        .app {
-          margin-left: auto; flex: none;
-          font-size: 11px; font-weight: 700; letter-spacing: .6px;
-          text-transform: uppercase; opacity: .85;
-          padding: 3px 9px; border-radius: 10px;
-          background: rgba(255,255,255,.18);
-          text-shadow: 0 1px 2px rgba(0,0,0,.2);
-        }
-        .bg.haspad ~ .content .title, .bg.haspad ~ .content .artist { padding-right: 104px; }
+        .bg.haspad ~ .content .title, .bg.haspad ~ .content .artist,
+        .bg.haspad ~ .content .prog { padding-right: 104px; }
         .title {
           font-size: 17px; font-weight: 700; line-height: 1.25;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -1746,7 +1739,6 @@ class HapticMediaCard extends HTMLElement {
           <div class="hdr">
             <svg viewBox="0 0 24 24"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
             <div class="dev"></div>
-            <div class="app"></div>
           </div>
           <div>
             <div class="title"></div>
@@ -1769,7 +1761,7 @@ class HapticMediaCard extends HTMLElement {
     `;
     const q = (x) => this.shadowRoot.querySelector(x);
     this._els = {
-      bg: q(".bg"), art: q(".art"), dev: q(".dev"), app: q(".app"),
+      bg: q(".bg"), art: q(".art"), dev: q(".dev"),
       title: q(".title"), artist: q(".artist"),
       fill: q(".fill"), tl: q(".tl"), tr: q(".tr"),
       pp: q(".pp"), iplay: q(".i-play"), ipause: q(".i-pause"),
@@ -1933,10 +1925,9 @@ class HapticMediaCard extends HTMLElement {
     bg.classList.toggle("haspad", !!art || logoOn);
 
     if (!s || s.state === "unavailable" || s.state === "off" || s.state === "idle") {
-      this._els.app.textContent = s ? s.state : "not found";
       this._els.title.textContent = "Nothing playing";
       this._els.title.classList.add("idle-note");
-      this._els.artist.textContent = "";
+      this._els.artist.textContent = s ? "" : "entity not found";
       this._renderProgress();
       this._els.iplay.style.display = "block";
       this._els.ipause.style.display = "none";
@@ -1944,7 +1935,6 @@ class HapticMediaCard extends HTMLElement {
     }
 
     this._els.title.classList.remove("idle-note");
-    this._els.app.textContent = s.attributes.app_name || s.state;
     this._els.title.textContent = s.attributes.media_title || "—";
     this._els.artist.textContent = s.attributes.media_artist || "";
     const playing = s.state === "playing";
