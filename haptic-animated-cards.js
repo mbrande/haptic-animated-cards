@@ -27,7 +27,7 @@
  * No build step, no dependencies, plain custom elements + Shadow DOM.
  */
 
-const VERSION = "3.5.2";
+const VERSION = "3.5.3";
 
 /* HA's own fireEvent shape. Do not "modernise" this to CustomEvent. */
 function fireEvent(node, type, detail, options = {}) {
@@ -1833,8 +1833,11 @@ class HapticMediaCard extends HTMLElement {
     const prog = this._els.fill.parentElement.parentElement;
     const on = !!p && p.dur > 0;
     // Live TV: playing but the stream has no duration - badge it, don't blank it.
+    // A TITLE is required evidence: real live TV always names its program, while
+    // DRM-shy casts (Netflix) expose an app name and nothing else - that's not live,
+    // so they get the quiet blank row instead of a false LIVE badge.
     const live = !on && !!s && s.state === "playing" && !s.attributes.media_duration
-      && !!(s.attributes.media_title || s.attributes.app_name);
+      && !!s.attributes.media_title;
     prog.classList.toggle("live", live);
     prog.style.visibility = on || live ? "" : "hidden";
     if (live) {
