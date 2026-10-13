@@ -3,14 +3,16 @@ name: HACS Validation
 # Required before submitting to hacs/default: the action must pass with no
 # errors and no ignores. Running it on every push means problems surface now
 # rather than in a review queue months from now.
+#
+# No daily schedule on purpose: GitHub switches off scheduled workflows in a
+# public repo after 60 days without a commit, and a switched-off workflow does
+# not run on pushes either (that happened on 2026-10-13). To check against new
+# HACS rules between releases, run it by hand from the Actions tab.
 
 on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    # HACS's own requirements change; a daily run catches that without a push.
-    - cron: "0 6 * * *"
   workflow_dispatch:
 
 jobs:
